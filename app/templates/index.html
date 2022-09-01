@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% import 'bootstrap/wtf.html' as wtf %}
+{% from "bootstrap/pagination.html" import render_pagination %}
+
+{% block app_content %}
+    {% if title %}
+        <h1>{{ title }}</h1>
+    {% endif %}
+    <p>
+        <a href="{{ url_for('routes.dataframe_add') }}">Добавить датафрейм</a>
+    </p>
+    <table class="table table-hover">
+        <tr>
+            <th>Имя</th>
+            <th>Описание</th>
+            <th>Ссылки</th>
+        </tr>
+        {% for dataframe in dataframes.items %}
+        <tr>
+            <td><a href="{{ url_for('routes.dataframe', pk=dataframe.id) }}">{{ dataframe.name }}</a></td>
+            <td>{{ dataframe.description }}</td>
+            <td>{{ dataframe.url_count }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {{ render_pagination(dataframes) }}
+{% endblock %}

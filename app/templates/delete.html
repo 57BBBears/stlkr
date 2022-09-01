@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+{% block app_content %}
+    {% if title %}
+        <h1>{{ title }}</h1>
+    {% endif %}
+    {% if description %}
+        <p>
+            {{ description }}
+        </p>
+    {% endif %}
+    <br/>
+    <form action="" method="post" class="form form-horizontal" role="form">
+        {{ form.hidden_tag() }}
+        <p>
+            {{ wtf.form_field(form.button, class_='btn btn-primary') }}
+        </p>
+        <p>
+            <a href="javascript:history.back()">Отмена</a>
+        </p>
+    </form>
+{% endblock %}

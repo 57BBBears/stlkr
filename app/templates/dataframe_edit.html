@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+
+{% block app_content %}
+    {% if title %}
+        <h1>{{ title }}</h1>
+    {% endif %}
+    <form action="" method="post" class="form form-horizontal" role="form">
+        {% include '_dataframe_form.html' %}
+    </form>
+{% endblock %}

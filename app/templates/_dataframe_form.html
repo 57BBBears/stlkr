@@ -1,0 +1,7 @@
+{% import 'bootstrap/wtf.html' as wtf %}
+
+{{ form.hidden_tag() }}
+{{ wtf.form_field(form.name) }}
+{{ wtf.form_field(form.description) }}
+{{ wtf.form_field(form.urls, rows=20) }}
+{{ wtf.form_field(form.submit, class_='btn btn-primary') }}

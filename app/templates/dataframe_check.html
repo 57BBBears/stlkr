@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+{% block app_content %}
+    {% if title %}
+        <h1>{{ title }}</h1>
+    {% endif %}
+    <p>
+        {{ dataframe.description }}
+    </p>
+    <form action="" method="post" class="form form-horizontal" role="form">
+        {{ form.hidden_tag() }}
+        {{ wtf.form_field(form.name) }}
+        {{ wtf.form_field(form.submit, class_='btn btn-primary') }}
+    </form>
+{% endblock %}
