@@ -1,8 +1,8 @@
 """init
 
-Revision ID: 63073e3eecf7
+Revision ID: 43bd10fdaa72
 Revises: 
-Create Date: 2022-07-29 18:31:56.325752
+Create Date: 2022-12-02 16:19:22.170470
 
 """
 from alembic import op
@@ -11,7 +11,7 @@ import sqlalchemy_utils
 
 
 # revision identifiers, used by Alembic.
-revision = '63073e3eecf7'
+revision = '43bd10fdaa72'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -38,7 +38,7 @@ def upgrade():
     op.create_table('url',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('dataframe_id', sa.Integer(), nullable=False),
-    sa.Column('url', sqlalchemy_utils.types.url.URLType(length=500), nullable=True),
+    sa.Column('url', sqlalchemy_utils.types.url.URLType(), nullable=True),
     sa.ForeignKeyConstraint(['dataframe_id'], ['dataframe.id'], ondelete='cascade'),
     sa.PrimaryKeyConstraint('id')
     )

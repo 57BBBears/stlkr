@@ -1,5 +1,4 @@
 import scrapy
-import random
 
 
 class UrlsSpider(scrapy.Spider):

@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% import 'bootstrap/wtf.html' as wtf %}
+
+{% block app_content %}
+    <h1>{{ cluster.name }}</h1>
+    <div class="row">
+        <div class="col-xs-6">
+
+        </div>
+        <div class="col-xs-6  text-right">
+            <a href="{{ url_for('routes.cluster_delete', pk=cluster.id) }}">Удалить</a>
+        </div>
+    </div>
+    {% if cluster.image %}
+        <p>
+            <img src="{{ cluster.img }}" alt="{{ cluster.name }}"/>
+        </p>
+    {% endif %}
+    <form action="" method="post" class="form form-horizontal" role="form">
+        {% include '_cluster_form.html' %}
+    </form>
+    <br/>
+    <div class="row">
+        <div class="col-xs-12">
+            {% if cluster.children %}
+            <p>
+                Дочерние кластеры:
+                {% for child in cluster.children %}
+                    {% if loop.index > 1 %}
+                        ,
+                    {% endif %}
+                    {{ child.name }}
+                {% endfor %}
+            </p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-xs-12">
+            {% if cluster.dataframes %}
+            <p>
+                Дочерние кластеры:
+                {% for item in cluster.dataframes %}
+                    {% if loop.index > 1 %}
+                        ,
+                    {% endif %}
+                    {{ item.name }}
+                {% endfor %}
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
+{% endblock %}

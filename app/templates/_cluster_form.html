@@ -1,0 +1,18 @@
+{% import 'bootstrap/wtf.html' as wtf %}
+
+{{ form.hidden_tag() }}
+{{ wtf.form_errors(form) }}
+{{ wtf.form_field(form.name) }}
+{% if form.slug %}
+    {{ wtf.form_field(form.slug) }}
+{% endif %}
+{{ wtf.form_field(form.title) }}
+{{ wtf.form_field(form.description) }}
+{{ wtf.form_field(form.excerpt) }}
+{{ wtf.form_field(form.text, rows=20) }}
+{{ wtf.form_field(form.image) }}
+{{ wtf.form_field(form.parent_id) }}
+{% if form.frames %}
+    {{ wtf.form_field(form.frames) }}
+{% endif %}
+{{ wtf.form_field(form.submit, class_='btn btn-primary') }}

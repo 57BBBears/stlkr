@@ -1,9 +1,9 @@
 import validators
 from flask_wtf import FlaskForm
-from wtforms import TextAreaField, SubmitField, ValidationError
+from wtforms import TextAreaField, SubmitField, ValidationError, SelectField, SelectMultipleField
 from wtforms_alchemy import model_form_factory
 from app import db
-from app.models import DataFrame, Check
+from app.models import DataFrame, Check, Cluster
 from app.utils import text_to_list
 
 
@@ -40,6 +40,30 @@ class EmptyForm(FlaskForm):
 class DataFrameCheckForm(ModelForm):
     class Meta:
         model = Check
-        include = ['name']
+        only = ['name', 'selectors']
 
     submit = SubmitField('Запустить')
+
+
+class ClusterAddForm(ModelForm):
+    # TODO add js to ClusterForm to fill slug while name editing instead of this form
+    class Meta:
+        model = Cluster
+        only = ['name', 'title', 'description', 'excerpt', 'text', 'image']
+
+    parent_id = SelectField('Parent cluster', coerce=int)
+
+    submit = SubmitField('Добавить')
+
+
+class ClusterForm(ModelForm):
+    class Meta:
+        model = Cluster
+        only = ['name', 'slug', 'title', 'description', 'excerpt', 'text', 'image']
+
+    parent_id = SelectField('Parent cluster', coerce=int)
+    frames = SelectMultipleField(coerce=int)
+
+    submit = SubmitField('Сохранить')
+
+

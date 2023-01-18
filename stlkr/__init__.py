@@ -73,7 +73,7 @@ class Stalker:
                                                   **kwargs
                                                   )
         else:
-            raise ValueError(f"Name '{name}' doesn't exist.")
+            raise ValueError(f"Crawler '{name}' doesn't exist.")
 
     def all(self):
         """
@@ -88,14 +88,27 @@ class Stalker:
         return list(self._crawlers.keys())
 
     def remove(self, name: str):
-        del self._crawlers[name]
+        """
+        Remove a crawler from future crawling process.
+        :param name: Name of a project spider.
+        """
+        if name in self._crawlers:
+            del self._crawlers[name]
+        else:
+            raise ValueError(f"Crawler '{name}' doesn't exist.")
 
     def run(self):
+        """
+        Run crawling.
+        """
         for name in self._crawlers:
             self._process.crawl(self._crawlers[name], **self._crawlers[name].params)
         self._process.start()
 
     def stop(self):
+        """
+        Stop crawling.
+        """
         return self._process.stop()
 
 

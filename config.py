@@ -1,27 +1,28 @@
 import os
-from dotenv import load_dotenv
 import json
 import logging
+from dotenv import load_dotenv
+
 
 base_dir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(base_dir, 'instance/.env'))
 
 
-class Config(object):
-    @staticmethod
-    def get_log_config(file):
-        # get logging config dictionary from json file
-        if file and os.path.exists(file):
-            with open(file, 'r') as f:
-                try:
-                    config = json.load(f)
-                except json.JSONDecodeError:
-                    logging.getLogger().warning(f'Can not decode logging config file "{file}"!', exc_info=True)
-                else:
-                    return config
+def get_log_config(file):
+    """ Get logging config dictionary from json file. """
+    if file and os.path.exists(file):
+        with open(file, 'r') as f:
+            try:
+                config = json.load(f)
+            except json.JSONDecodeError:
+                logging.getLogger().warning(f'Can not decode logging config file "{file}"! ', exc_info=True)
+            else:
+                return config
 
-        return None
+    return None
 
+
+class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY')
     # db
     SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI') or \
@@ -45,3 +46,7 @@ class Config(object):
     # api
 
 
+class TestingConfig(Config):
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    QUEUES = 'test'
