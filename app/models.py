@@ -38,8 +38,10 @@ class DataFrame(db.Model):
     def url_count(self):
         return Url.query.filter_by(dataframe=self).count()
 
-    def __init__(self, name):
+    def __init__(self, name, description = None):
         self.name = name
+        if description:
+            self.description = description
 
     def __repr__(self):
         return self.name
@@ -71,8 +73,9 @@ class Check(db.Model):
     dataframe_id = db.Column(db.Integer, db.ForeignKey(DataFrame.id, ondelete='cascade'), nullable=False)
     name = db.Column(db.String(50), nullable=False, info={'label': 'Название'})
     selectors = db.Column(db.Text, info={'label': 'Селекторы в json формате'})  # TODO delete when use Property
-    #start_time = db.Column(db.DateTime, server_default=func.utc_timestamp())
-    start_time = db.Column(db.DateTime, default=datetime.utcnow)
+    start_time = db.Column(db.DateTime, server_default=func.utc_timestamp())
+    # for non postgresql dbs
+    #start_time = db.Column(db.DateTime, default=datetime.utcnow)
     end_time = db.Column(db.DateTime)
 
     urls = db.relationship('UrlCheck', back_populates='check', lazy='select', cascade='all, delete-orphan')
@@ -145,10 +148,11 @@ class UrlCheck(db.Model):
     status = db.Column(db.Integer)
     raw_data = db.Column(db.Text)
     extracted_data = db.Column(db.Text)  # TODO delete when use Property
-    #check_time = db.Column(db.DateTime, server_default=func.utc_timestamp())
-    #last_modified = db.Column(db.DateTime, onupdate=func.utc_timestamp())
-    check_time = db.Column(db.DateTime, default=datetime.utcnow)
-    last_modified = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    check_time = db.Column(db.DateTime, server_default=func.utc_timestamp())
+    last_modified = db.Column(db.DateTime, onupdate=func.utc_timestamp())
+    #for non postgresql dbs
+    #check_time = db.Column(db.DateTime, default=datetime.utcnow)
+    #last_modified = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
     url = db.relationship(Url, back_populates='checks')
     check = db.relationship(Check, back_populates='urls')
@@ -186,7 +190,8 @@ db.event.listen(Cluster.name, 'set', Cluster.slugify, retval=False)
 DataFrameCluster = db.Table(
     'dataframe_cluster',
     db.Column('dataframe_id', db.Integer, db.ForeignKey(DataFrame.id, ondelete='cascade')),
-    db.Column('cluster_id', db.Integer, db.ForeignKey(Cluster.id, ondelete='cascade'))
+    db.Column('cluster_id', db.Integer, db.ForeignKey(Cluster.id, ondelete='cascade')),
+    UniqueConstraint('dataframe_id', 'cluster_id', name='unique_dataframe_id_cluster_id')
 )
 
 

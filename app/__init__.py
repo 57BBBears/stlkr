@@ -25,7 +25,7 @@ def create_app(config_class=Config):
     app.redis = Redis.from_url(app.config['REDIS_URL'])
     app.queue = {queue: rq.Queue(queue, connection=app.redis) for queue in app.config['QUEUES']}
     # routes
-    from app import routes
-    app.register_blueprint(routes.bp)
+    from app.core import bp
+    app.register_blueprint(bp)
 
     return app

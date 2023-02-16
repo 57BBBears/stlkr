@@ -1,13 +1,13 @@
 from flask import Blueprint, render_template, url_for, redirect, flash, request, current_app
-from app.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm
-from app.models import DataFrame, Url, Check, UrlCheck, Cluster
+from app.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm
+from app.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster
 from app.utils import text_to_list
 from app import db
 from datetime import datetime
 from redis.exceptions import ResponseError
 from app.utils import populate_object
+from app.core import bp
 
-bp = Blueprint('routes', __name__)
 
 
 @bp.route('/')
@@ -56,7 +56,7 @@ def dataframe_add():
 
         flash('Датафрейм добавлен.')
 
-        return redirect(url_for('routes.dataframe', pk=df.id))
+        return redirect(url_for('core.dataframe', pk=df.id))
 
     return render_template('dataframe_add.html', title='Добавить датафрейм', form=form)
 
@@ -113,7 +113,7 @@ def dataframe_edit(pk):
 
         flash('Датафрейм изменён.')
 
-        return redirect(url_for('routes.dataframe', pk=df.id))
+        return redirect(url_for('core.dataframe', pk=df.id))
 
     return render_template('dataframe_edit.html', title='Изменить датафрейм', form=form)
 
@@ -130,7 +130,7 @@ def dataframe_delete(pk):
 
         flash(f'Датафрейм "{df.name}" удалён.')
 
-        return redirect(url_for('routes.index'))
+        return redirect(url_for('core.index'))
 
     return render_template('delete.html', title=f'Удалить датафрейм "{df.name}" ?', description=df.description, form=form)
 
@@ -145,7 +145,7 @@ def dataframe_check(pk):
     cur_check = db.session.query(Check.id).filter_by(dataframe=df, end_time=None).first() is not None
     if cur_check:
         flash('Датафрейм уже проверяется.')
-        return redirect(url_for('routes.dataframe', pk=df.id))
+        return redirect(url_for('core.dataframe', pk=df.id))
 
     form = DataFrameCheckForm()
     # fill default name with current date time
@@ -170,7 +170,7 @@ def dataframe_check(pk):
         else:
             flash(f'Проверка "{form.name.data}" датафрейма "{df.name}" запущена.')
 
-        return redirect(url_for('routes.dataframe', pk=df.id))
+        return redirect(url_for('core.dataframe', pk=df.id))
 
     return render_template('dataframe_check.html',
                            title=f'Запустить проверку датафрейма "{df.name}" ?', dataframe=df, form=form)
@@ -187,7 +187,7 @@ def check_edit(pk):
         check.save()
         flash(f'Проверка {check.name} изменена.')
 
-        return redirect(url_for('routes.dataframe', pk=check.dataframe.id))
+        return redirect(url_for('core.dataframe', pk=check.dataframe.id))
 
     return render_template('dataframe_check.html', title=f'Изменить проверку "{check.name}" ?')
 
@@ -205,7 +205,7 @@ def check_delete(pk):
         db.session.delete(check)
         db.session.commit()
 
-        return redirect(url_for('routes.dataframe', pk=df.id))
+        return redirect(url_for('core.dataframe', pk=df.id))
 
     description = str(check.start_time) + ' - ' + str(check.end_time)
 
@@ -218,7 +218,7 @@ def check_extract_data(pk):
 
     if not check.selectors:
         flash(f'Заполните селекторы проверки "{check.name}".')
-        return redirect(url_for('routes.check_edit', pk=check.id))
+        return redirect(url_for('core.check_edit', pk=check.id))
 
     try:
         if job := check.extract_data():
@@ -230,31 +230,57 @@ def check_extract_data(pk):
         current_app.logger.error('Task "check_extract_data" has not launched. ', e)
         flash(f'Ошибка запуска проверки "{check.name}". Сервер задач не отвечает.')
 
-    return redirect(url_for('routes.dataframe', pk=check.dataframe.id))
+    return redirect(url_for('core.dataframe', pk=check.dataframe.id))
 
 
 @bp.route('/cluster/<pk>/', methods=['GET', 'POST'])
 def cluster(pk):
     clr = Cluster.query.get_or_404(pk)
+
+    form = ClusterForm(obj=clr, parent_id='3')
+    # fill parent field
     # TODO check out all descendants
-    query = Cluster.query.filter((Cluster.id != pk) & ((Cluster.parent_id != pk) | (Cluster.parent_id == None))).all()
+    query = Cluster.query.filter(
+        (Cluster.id != pk) & ((Cluster.parent_id != pk) | (Cluster.parent_id.is_(None)))).all()
     choices = [(item.id, item.name) for item in query]
     choices.insert(0, (0, ''))
-
-    form = ClusterForm(obj=clr)
     form.parent_id.choices = choices
 
+    current_frames = [df.name for df in clr.dataframes]
+    # fill dataframes field
     query = DataFrame.query.with_entities(DataFrame.id, DataFrame.name)
-    form.frames.choices = [(df.id, df.name) for df in query]
-    #form.frames.choices = DataFrame.query.all()
-    #current_app.logger.info(form._fields)
+    form.frames.choices = [(df.name, df.name) for df in query]
+
+
     if form.validate_on_submit():
         if not form.parent_id.data:
             form.parent_id.data = None
 
         populate_object(clr, form, exclude=['frames'])
-        #clr.dataframes =
-        #form.populate_obj(clr)
+
+        # if dataframes changed - delete previous and append new
+        if form.frames.data != current_frames:
+            dataframes_for_del = set(current_frames) - set(form.frames.data)
+            dataframes_for_add = set(form.frames.data) - set(current_frames)
+
+            if dataframes_for_del:
+                # delete from m2m table dataframe ids where select ids with names for deleting
+                db.session.execute(DataFrameCluster.delete().
+                                   where(DataFrameCluster.c.cluster_id == clr.id,
+                                         DataFrameCluster.c.dataframe_id.in_(
+                                             DataFrame.query.with_entities(DataFrame.id).filter(
+                                                 DataFrame.name.in_(dataframes_for_del)
+                                             )
+                                         )
+                                         )
+                                   )
+            if dataframes_for_add:
+                dataframes_for_add_ids = DataFrame.query.with_entities(DataFrame.id).filter(
+                                                 DataFrame.name.in_(dataframes_for_add)
+                                             )
+                db.session.execute(DataFrameCluster.insert(),
+                                   [{'cluster_id': clr.id, 'dataframe_id': df_id} for df_id, in dataframes_for_add_ids])
+
         db.session.commit()
 
         flash('Кластер обновлён.')
@@ -287,7 +313,7 @@ def cluster_add():
 
         flash('Кластер добавлен.')
 
-        return redirect(url_for('routes.cluster', pk=clr.id))
+        return redirect(url_for('core.cluster', pk=clr.id))
 
     return render_template('cluster_add.html', title='Добавить кластер', form=form)
 
@@ -304,6 +330,6 @@ def cluster_delete(pk):
         db.session.commit()
         flash(f'Кластер "{clr.name}" удалён.')
 
-        return redirect(url_for('routes.index'))
+        return redirect(url_for('core.index'))
 
     return render_template('delete.html', title=f'Удалить кластер "{clr.name}" и всех его потомков?', form=form)

@@ -23,6 +23,7 @@ def get_log_config(file):
 
 
 class Config:
+    TESTING = False
     SECRET_KEY = os.environ.get('SECRET_KEY')
     # db
     SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI') or \

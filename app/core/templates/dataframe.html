@@ -30,13 +30,13 @@
                 </select>
             </div>
             <div class="col-xs-2">
-                <a href="{{ url_for('routes.check_extract_data', pk=check_id) }}">Обработать данные</a>
+                <a href="{{ url_for('core.check_extract_data', pk=check_id) }}">Обработать данные</a>
             </div>
             <div class="col-xs-2">
-                <a href="{{ url_for('routes.check_edit', pk=check_id) }}">Изменить проверку</a>
+                <a href="{{ url_for('core.check_edit', pk=check_id) }}">Изменить проверку</a>
             </div>
             <div class="col-xs-2">
-                <a href="{{ url_for('routes.check_delete', pk=check_id) }}">Удалить проверку</a>
+                <a href="{{ url_for('core.check_delete', pk=check_id) }}">Удалить проверку</a>
             </div>
         </div>
     {% endif %}
@@ -65,13 +65,13 @@
     {{ render_pagination(urls) }}
     <div class="row">
         <div class="col-xs-4">
-            <a href="{{ url_for('routes.dataframe_check', pk=dataframe.id) }}">Запустить проверку</a>
+            <a href="{{ url_for('core.dataframe_check', pk=dataframe.id) }}">Запустить проверку</a>
         </div>
         <div class="col-xs-4 text-center">
-            <a href="{{ url_for('routes.dataframe_edit', pk=dataframe.id) }}{% if check_id %}?check={{ check_id }} {% endif %}">Редактировать датафрейм</a>
+            <a href="{{ url_for('core.dataframe_edit', pk=dataframe.id) }}{% if check_id %}?check={{ check_id }} {% endif %}">Редактировать датафрейм</a>
         </div>
         <div class="col-xs-4  text-right">
-            <a href="{{ url_for('routes.dataframe_delete', pk=dataframe.id) }}">Удалить датафрейм</a>
+            <a href="{{ url_for('core.dataframe_delete', pk=dataframe.id) }}">Удалить датафрейм</a>
         </div>
     </div>
 {% endblock %}

@@ -62,7 +62,7 @@ class ClusterForm(ModelForm):
         only = ['name', 'slug', 'title', 'description', 'excerpt', 'text', 'image']
 
     parent_id = SelectField('Parent cluster', coerce=int)
-    frames = SelectMultipleField(coerce=int)
+    frames = SelectMultipleField(coerce=str)
 
     submit = SubmitField('Сохранить')
 
