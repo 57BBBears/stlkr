@@ -4,7 +4,7 @@ from app.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluste
 from app.utils import text_to_list
 from app import db
 from datetime import datetime
-from redis.exceptions import ResponseError
+from redis.exceptions import ResponseError, ConnectionError
 from app.utils import populate_object
 from app.core import bp
 
@@ -16,7 +16,7 @@ def index():
     df = DataFrame.query.order_by(DataFrame.id).paginate(per_page=per_page)
     clusters = Cluster.query.order_by(Cluster.id)
 
-    return render_template('index.html', title='Главная', dataframes=df, clusters=clusters)
+    return render_template('index.html', title='Админка', dataframes=df, clusters=clusters)
 
 
 @bp.route('/dataframe/<pk>/')
@@ -153,17 +153,26 @@ def dataframe_check(pk):
         form.name.data = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
 
     if form.validate_on_submit():
-        check = Check(dataframe=df, name=form.name.data, selectors=form.name.data)
+        check = Check(dataframe=df, name=form.name.data, selectors=form.selectors.data)
         db.session.add(check)
         db.session.commit()
         # Check if a message broker is available
         try:
             if job := check.start():
-                current_app.logger.info(f'Task "check_dataframe" has launched. Task id: {job.get_id()}')
+                current_app.logger.info(f'Task "check_dataframe" has been launched. Task id: {job.get_id()}')
             else:
-                current_app.logger.info(f'Task "check_dataframe" has not launched. Something wrong with check.start')
+                current_app.logger.info(f'Task "check_dataframe" has not been launched. Something wrong with check.start')
+        except ConnectionError as e:
+            current_app.logger.error(f'Task "check_dataframe" has not been launched. Error: {e}')
+            db.session.delete(check)
+            db.session.commit()
         except ResponseError as e:
-            current_app.logger.error(f'Task "check_dataframe" has not launched. Error: ', e)
+            current_app.logger.error(f'Task "check_dataframe" has not been launched. Error: {e}')
+            db.session.delete(check)
+            db.session.commit()
+            flash(f'Ошибка запуска проверки "{form.name.data}". Сервер задач не отвечает.')
+        except Exception as e:
+            current_app.logger.error(f'Task "check_dataframe" has not been launched. Error: {e}')
             db.session.delete(check)
             db.session.commit()
             flash(f'Ошибка запуска проверки "{form.name.data}". Сервер задач не отвечает.')
@@ -172,8 +181,8 @@ def dataframe_check(pk):
 
         return redirect(url_for('core.dataframe', pk=df.id))
 
-    return render_template('dataframe_check.html',
-                           title=f'Запустить проверку датафрейма "{df.name}" ?', dataframe=df, form=form)
+    return render_template('dataframe_check.html', dataframe=df, form=form,
+                           title=f'Запустить проверку датафрейма "{df.name}" ?')
 
 
 @bp.route('/check/<pk>/edit/', methods=['GET', 'POST'])
@@ -189,7 +198,8 @@ def check_edit(pk):
 
         return redirect(url_for('core.dataframe', pk=check.dataframe.id))
 
-    return render_template('dataframe_check.html', title=f'Изменить проверку "{check.name}" ?')
+    return render_template('dataframe_check.html', dataframe=check.dataframe, form=form,
+                           title=f'Изменить проверку "{check.name}" ?')
 
 
 @bp.route('/check/<pk>/delete/', methods=['GET', 'POST'])

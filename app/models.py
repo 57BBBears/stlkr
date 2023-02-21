@@ -7,10 +7,21 @@ from sqlalchemy import UniqueConstraint
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.sql import func
 from sqlalchemy.orm import validates
+from sqlalchemy.sql import expression
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.types import DateTime
 from sqlalchemy_utils import URLType
 from flask import current_app
 from app import db
 
+
+class utcnow(expression.FunctionElement):
+    type = DateTime()
+    inherit_cache = True
+
+@compiles(utcnow, 'postgresql')
+def pg_utcnow(element, compiler, **kw):
+    return "TIMEZONE('utc', CURRENT_TIMESTAMP)"
 
 class DataFrame(db.Model):
     """ Dataframe unites urls """
@@ -19,7 +30,7 @@ class DataFrame(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False, info={'label': 'Название'})
     description = db.Column(db.String(150), info={'label': 'Описание'})
     # fk must be table name not model, use_alter to prevent unresolved cycles between check and dataframe
-    check_id = db.Column(db.Integer, db.ForeignKey('check.id', ondelete='set null', use_alter=True))
+    check_id = db.Column(db.Integer, db.ForeignKey('dataframe_check.id', ondelete='set null', use_alter=True))
 
     active_check = db.relationship('Check',
                                    back_populates='active_dataframe',
@@ -62,19 +73,19 @@ class Url(db.Model):
             raise ValueError(f'{url} failed url validation.')
 
         return url
-    # TODO add url dataframe_id unique constraint to avoid duplicates
-    #UniqueConstraint(dataframe_id, url, name='unique_dataframe_id_url')
+
+    UniqueConstraint(dataframe_id, url, name='unique_dataframe_id_url')
 
 
 class Check(db.Model):
     """ Check is used for url parsing - connects urls data with the dataframe """
-    #  __tablename__ = 'dataframe_check'  TODO uncomment before initial db upgrade
+    __tablename__ = 'dataframe_check'
     id = db.Column(db.Integer, primary_key=True)
     dataframe_id = db.Column(db.Integer, db.ForeignKey(DataFrame.id, ondelete='cascade'), nullable=False)
     name = db.Column(db.String(50), nullable=False, info={'label': 'Название'})
     selectors = db.Column(db.Text, info={'label': 'Селекторы в json формате'})  # TODO delete when use Property
-    start_time = db.Column(db.DateTime, server_default=func.utc_timestamp())
-    # for non postgresql dbs
+    # for different dbs
+    start_time = db.Column(db.DateTime, server_default=utcnow())
     #start_time = db.Column(db.DateTime, default=datetime.utcnow)
     end_time = db.Column(db.DateTime)
 
@@ -147,10 +158,10 @@ class UrlCheck(db.Model):
     check_id = db.Column(db.Integer, db.ForeignKey(Check.id, ondelete='cascade'), nullable=False)
     status = db.Column(db.Integer)
     raw_data = db.Column(db.Text)
-    extracted_data = db.Column(db.Text)  # TODO delete when use Property
-    check_time = db.Column(db.DateTime, server_default=func.utc_timestamp())
-    last_modified = db.Column(db.DateTime, onupdate=func.utc_timestamp())
-    #for non postgresql dbs
+    extracted_data = db.Column(db.Text)  #TODO delete when use Property
+    # for different dbs ?
+    check_time = db.Column(db.DateTime, server_default=utcnow())
+    last_modified = db.Column(db.DateTime, onupdate=utcnow())
     #check_time = db.Column(db.DateTime, default=datetime.utcnow)
     #last_modified = db.Column(db.DateTime, onupdate=datetime.utcnow)
 

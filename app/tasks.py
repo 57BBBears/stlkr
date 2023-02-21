@@ -31,7 +31,7 @@ def check_dataframe(pk: int):
                     url_check = UrlCheck(check=check,
                                          url_id=unchecked_urls[item['url']],
                                          status=item['status'],
-                                         data=item['data']
+                                         raw_data=item['data']
                                          )
                     db.session.add(url_check)
                     db.session.commit()
