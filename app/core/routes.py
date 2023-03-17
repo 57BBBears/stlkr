@@ -1,13 +1,15 @@
+import json
 from flask import Blueprint, render_template, url_for, redirect, flash, request, current_app
-from app.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm
 from app.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster
 from app.utils import text_to_list
 from app import db
 from datetime import datetime
-from redis.exceptions import ResponseError, ConnectionError
+from redis.exceptions import ConnectionError, ResponseError
+from rq.exceptions import NoSuchJobError
 from app.utils import populate_object
 from app.core import bp
-
+from app.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm
+from app.core.tasks import parse_data_by_xpath
 
 
 @bp.route('/')
@@ -16,7 +18,7 @@ def index():
     df = DataFrame.query.order_by(DataFrame.id).paginate(per_page=per_page)
     clusters = Cluster.query.order_by(Cluster.id)
 
-    return render_template('index.html', title='Админка', dataframes=df, clusters=clusters)
+    return render_template('core/index.html', title='Админка', dataframes=df, clusters=clusters)
 
 
 @bp.route('/dataframe/<pk>/')
@@ -24,11 +26,28 @@ def dataframe(pk):
     df = DataFrame.query.get_or_404(pk)
     per_page = request.args.get('per_page', current_app.config['URLS_PER_PAGE'], type=int)
 
+    check_id = None
+    current_check = None
+    is_checking = None
+    is_extracting_data = None
+    # TODO check connection - disable checking if connection error
     if df.checks:
         check_id = request.args.get('check', df.checks[0].id, type=int)
-    else:
-        check_id = None
+        current_check = db.session.get(Check, check_id)
+        try:
+            is_checking = current_check.is_checking()
+            is_extracting_data = current_check.is_extracting_data()
+        except (ConnectionError, ResponseError) as e:
+            current_app.logger.warning(f'Queue server is unavailable. {e}', exc_info=True)
+            flash('Сервер задач не отвечает.', 'error')
+        except NoSuchJobError:
+            # no task queued for the check
+            pass
+        except AttributeError:
+            # current_check is None
+            flash(f'Проверка {check_id} не найдена.', 'warning')
 
+    print('is_checking-', is_checking, ' is_extracting_data-', is_extracting_data)
     urls = db.session.query(Url.url, UrlCheck.status)\
         .outerjoin(Url.checks.and_(UrlCheck.check_id == check_id))\
         .filter((Url.dataframe_id == df.id))\
@@ -36,7 +55,8 @@ def dataframe(pk):
 
     urls = urls.paginate(per_page=per_page)
 
-    return render_template('dataframe.html', dataframe=df, check_id=check_id, urls=urls)
+    return render_template('core/dataframe.html', dataframe=df, current_check=current_check,
+                           is_extracting_data=is_extracting_data, is_checking=is_checking, urls=urls)
 
 
 @bp.route('/dataframe/add/', methods=['GET', 'POST'])
@@ -58,17 +78,17 @@ def dataframe_add():
 
         return redirect(url_for('core.dataframe', pk=df.id))
 
-    return render_template('dataframe_add.html', title='Добавить датафрейм', form=form)
+    return render_template('core/dataframe_add.html', title='Добавить датафрейм', form=form)
 
 
 @bp.route('/dataframe/<pk>/edit/', methods=['GET', 'POST'])
 def dataframe_edit(pk):
     df = DataFrame.query.get_or_404(pk)
+    # If there is a dataframe check - add a response status for checked urls if exists else just show dataframe urls
     if df.checks:
         check_id = request.args.get('check', df.checks[0].id, type=int)
     else:
         check_id = None
-    # If there is a dataframe check - add a response status for checked urls if exists else just show dataframe urls
 
     urls = db.session.query(Url.id, Url.url, UrlCheck.status)\
         .outerjoin(Url.checks.and_(UrlCheck.check_id == check_id))\
@@ -115,11 +135,12 @@ def dataframe_edit(pk):
 
         return redirect(url_for('core.dataframe', pk=df.id))
 
-    return render_template('dataframe_edit.html', title='Изменить датафрейм', form=form)
+    return render_template('core/dataframe_edit.html', title='Изменить датафрейм', form=form)
 
 
 @bp.route('/dataframe/<pk>/delete/', methods=['GET', 'POST'])
 def dataframe_delete(pk):
+    #TODO check running tasks of dataframe's checks before deleting?
     df = DataFrame.query.get_or_404(pk)
     form = EmptyForm()
     form.button.label.text = 'Удалить'
@@ -132,12 +153,12 @@ def dataframe_delete(pk):
 
         return redirect(url_for('core.index'))
 
-    return render_template('delete.html', title=f'Удалить датафрейм "{df.name}" ?', description=df.description, form=form)
+    return render_template('core/delete.html', title=f'Удалить датафрейм "{df.name}" ?', description=df.description, form=form)
 
 
 @bp.route('/dataframe/<pk>/check/', methods=['GET', 'POST'])
 def dataframe_check(pk):
-    # TODO check start frequency - do not start if prev check has start_time less than ...
+    # TODO check start frequency - do not start if prev check has start_time less than ... ?
     df = DataFrame.query.get_or_404(pk)
 
     # check if dataframe is currently being checked
@@ -150,7 +171,7 @@ def dataframe_check(pk):
     form = DataFrameCheckForm()
     # fill default name with current date time
     if request.method == 'GET':
-        form.name.data = datetime.utcnow().strftime('%Y-%m-%d %H:%M')
+        form.name.data = datetime.now().strftime('%Y-%m-%d %H:%M')
 
     if form.validate_on_submit():
         check = Check(dataframe=df, name=form.name.data, selectors=form.selectors.data)
@@ -162,11 +183,7 @@ def dataframe_check(pk):
                 current_app.logger.info(f'Task "check_dataframe" has been launched. Task id: {job.get_id()}')
             else:
                 current_app.logger.info(f'Task "check_dataframe" has not been launched. Something wrong with check.start')
-        except ConnectionError as e:
-            current_app.logger.error(f'Task "check_dataframe" has not been launched. Error: {e}')
-            db.session.delete(check)
-            db.session.commit()
-        except ResponseError as e:
+        except (ConnectionError, ResponseError) as e:
             current_app.logger.error(f'Task "check_dataframe" has not been launched. Error: {e}')
             db.session.delete(check)
             db.session.commit()
@@ -175,13 +192,13 @@ def dataframe_check(pk):
             current_app.logger.error(f'Task "check_dataframe" has not been launched. Error: {e}')
             db.session.delete(check)
             db.session.commit()
-            flash(f'Ошибка запуска проверки "{form.name.data}". Сервер задач не отвечает.')
+            flash(f'Ошибка запуска проверки "{form.name.data}". Неизвестная ошибка.')
         else:
             flash(f'Проверка "{form.name.data}" датафрейма "{df.name}" запущена.')
 
         return redirect(url_for('core.dataframe', pk=df.id))
 
-    return render_template('dataframe_check.html', dataframe=df, form=form,
+    return render_template('core/dataframe_check.html', dataframe=df, form=form,
                            title=f'Запустить проверку датафрейма "{df.name}" ?')
 
 
@@ -193,12 +210,12 @@ def check_edit(pk):
 
     if form.validate_on_submit():
         form.populate_obj(check)
-        check.save()
+        db.session.commit()
         flash(f'Проверка {check.name} изменена.')
 
         return redirect(url_for('core.dataframe', pk=check.dataframe.id))
 
-    return render_template('dataframe_check.html', dataframe=check.dataframe, form=form,
+    return render_template('core/dataframe_check.html', dataframe=check.dataframe, form=form,
                            title=f'Изменить проверку "{check.name}" ?')
 
 
@@ -211,7 +228,15 @@ def check_delete(pk):
     form.button.label.text = 'Удалить'
 
     if form.validate_on_submit():
-        # TODO check if check has a running task - stop it first
+        try:
+            check.stop_extract_data()
+            check.stop()
+        except (ConnectionError, ResponseError) as e:
+            current_app.logger.warning(f'Queue server is unavailable. {e}', exc_info=True)
+        except NoSuchJobError:
+            #no task queued for the check
+            pass
+
         db.session.delete(check)
         db.session.commit()
 
@@ -219,7 +244,7 @@ def check_delete(pk):
 
     description = str(check.start_time) + ' - ' + str(check.end_time)
 
-    return render_template('delete.html', title=f'Удалить проверку "{check.name}" ?', description=description, form=form)
+    return render_template('core/delete.html', title=f'Удалить проверку "{check.name}" ?', description=description, form=form)
 
 
 @bp.route('/check/<pk>/extract_data/')
@@ -230,17 +255,73 @@ def check_extract_data(pk):
         flash(f'Заполните селекторы проверки "{check.name}".')
         return redirect(url_for('core.check_edit', pk=check.id))
 
+    # test selectors
+    if 'test' in request.args:
+        data = check_test_selectors(check, check.selectors)
+        flash(data)
+
+        return redirect(url_for('core.dataframe', pk=check.dataframe_id, current_check=check.id))
+
+    if check.is_extracting_data():
+        flash(f'Обработка данных проверки "{check.name}" уже идёт.')
+        return redirect(url_for('core.dataframe', pk=check.dataframe_id, current_check=check.id))
+
+    # check weather we extract all data or only new
+    kwargs = {}
+    only_new = request.args.get('only_new', type=int)
+    if only_new is not None:
+        kwargs['only_new'] = bool(only_new)
+
     try:
-        if job := check.extract_data():
-            flash(f'Обработка данных проверки "{check.name}" запущена.')
-            current_app.logger.info(f'Task "check_extract_data" has launched. Task id: {job.get_id()}')
-        else:
-            flash(f'Обработка данных проверки "{check.name}" уже идёт.')
-    except ResponseError as e:
-        current_app.logger.error('Task "check_extract_data" has not launched. ', e)
+        job = check.extract_data(**kwargs)
+        flash(f'Обработка данных проверки "{check.name}" запущена.')
+        current_app.logger.info(f'Task "check_extract_data" has launched. Task id: {job.get_id()}')
+    except (ConnectionError, ResponseError) as e:
+        current_app.logger.error(f'Task "check_extract_data" has not launched. Error: {e}')
         flash(f'Ошибка запуска проверки "{check.name}". Сервер задач не отвечает.')
 
-    return redirect(url_for('core.dataframe', pk=check.dataframe.id))
+    return redirect(url_for('core.dataframe', pk=check.dataframe_id, current_check=check.id))
+
+def check_test_selectors(check: Check, selectors: str) -> str:
+    url_check = UrlCheck.query.filter(UrlCheck.raw_data.isnot(None), UrlCheck.check==check, UrlCheck.status==200).first()
+    if url_check:
+        source = url_check.raw_data
+        try:
+            selectors_dict = json.loads(check.selectors)
+        except json.JSONDecodeError:
+            return 'Ошибка JSON декодирования селекторов.'
+        else:
+            data = parse_data_by_xpath(source, selectors_dict)
+    else:
+        return 'Нет данных для проверки.'
+
+    return data
+
+@bp.route('/check/<pk>/stop/')
+def check_stop(pk):
+    check = Check.query.get_or_404(pk)
+
+    # stop certain job or both
+    stop_param = 'job'
+    stop_job = request.args.get(stop_param)
+
+    try:
+        if stop_job == 'extract' or stop_job is None:
+            check.stop_extract_data()
+            flash('Остановлено извлечение данных.')
+
+        if stop_job == 'check' or stop_job is None:
+            check.stop()
+            flash('Остановлено получение данных.')
+    except (ConnectionError, ResponseError) as e:
+        current_app.logger.warning(f'Can not stop check {check}. Queue server is unavailable. {e}', exc_info=True)
+        flash('Сервер задач не отвечает. Попробуйте позже.')
+    except NoSuchJobError as e:
+        # no task queued for the check
+        current_app.logger.warning(f'Can not stop check {check}. No such job. {e}', exc_info=True)
+        flash('Задача не найдена.')
+
+    return redirect(url_for('core.dataframe', pk=check.dataframe_id, current_check=check.id))
 
 
 @bp.route('/cluster/<pk>/', methods=['GET', 'POST'])
@@ -295,7 +376,7 @@ def cluster(pk):
 
         flash('Кластер обновлён.')
 
-    return render_template('cluster.html', cluster=clr, form=form)
+    return render_template('core/cluster.html', cluster=clr, form=form)
 
 
 @bp.route('/cluster/add/', methods=['GET', 'POST'])
@@ -325,7 +406,7 @@ def cluster_add():
 
         return redirect(url_for('core.cluster', pk=clr.id))
 
-    return render_template('cluster_add.html', title='Добавить кластер', form=form)
+    return render_template('core/cluster_add.html', title='Добавить кластер', form=form)
 
 
 @bp.route('/cluster/<pk>/delete/', methods=['GET', 'POST'])
@@ -342,4 +423,4 @@ def cluster_delete(pk):
 
         return redirect(url_for('core.index'))
 
-    return render_template('delete.html', title=f'Удалить кластер "{clr.name}" и всех его потомков?', form=form)
+    return render_template('core/delete.html', title=f'Удалить кластер "{clr.name}" и всех его потомков?', form=form)

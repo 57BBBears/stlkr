@@ -1,0 +1,103 @@
+{% extends 'core/base.html' %}
+{% import 'bootstrap/wtf.html' as wtf %}
+{% from "bootstrap/pagination.html" import render_pagination %}
+
+{% block app_content %}
+    <h1>{{ dataframe.name }}</h1>
+    <p>
+        {% if dataframe.description %}
+            {{ dataframe.description }}
+        {% endif %}
+    </p>
+    {% if dataframe.checks %}
+        <br/>
+        <br/>
+        <p><b>Проверки датафрейма:</b></p>
+        <div class="row">
+            <div class="col-xs-6">
+                <select name="checks" id="checks" class="">
+                    {% for check in dataframe.checks %}
+                        {% if check.id == current_check.id %}
+                            <option selected value="{{ check.id }}">{{ check.name }}
+                                | {{ check.start_time.strftime('%Y-%m-%d %H:%M')}}
+                                | {% if check.end_time %}{{ check.end_time.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+                            </option>
+                        {% else %}
+                            <option value="{{ check.id }}">{{ check.name }}
+                                | {{ check.start_time.strftime('%Y-%m-%d %H:%M')}}
+                                | {% if check.end_time %}{{ check.end_time.strftime('%Y-%m-%d %H:%M') }}{% endif %}
+                            </option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            {% if (current_check and is_extracting_data) %}
+                <div class="col-xs-6">
+                    Идёт извлечение данных...
+                    <a href="{{ url_for('core.check_stop', pk=current_check.id, job='extract') }}">Остановить задачу</a>
+                </div>
+            {% elif (current_check and not is_checking) %}
+                <div class="col-xs-2">
+                    <a href="{{ url_for('core.check_extract_data', pk=current_check.id) }}">Извлечь данные</a>
+                </div>
+                <div class="col-xs-2">
+                    <a href="{{ url_for('core.check_extract_data', pk=current_check.id, only_new=0) }}">Переизвлечь все данные</a>
+                </div>
+                <div class="col-xs-2">
+                    <a href="{{ url_for('core.check_extract_data', pk=current_check.id, test=1) }}">Тест извлечения</a>
+                </div>
+            {% endif %}
+        </div>
+        <div class="row">
+            <div class="col-xs-12">
+                <a href="{{ url_for('core.check_edit', pk=current_check.id) }}">Редактировать проверку</a>
+                <br/>
+                <br/>
+                <a href="{{ url_for('core.check_delete', pk=current_check.id) }}">Удалить проверку</a>
+            </div>
+        </div>
+    {% endif %}
+    <br/>
+    <br/>
+    {% with prev_items = (urls.page - 1) * urls.per_page %}
+        <p>Ссылки: {{ [prev_items + 1, urls.total] | min }} - {{ [prev_items + urls.per_page, urls.total] | min }} из {{ urls.total }}</p>
+    {% endwith %}
+    <br/>
+    <table class="table table-hover">
+        <tr>
+            <th>Url</th>
+            <th>Status</th>
+        </tr>
+        {% for url in urls.items %}
+        <tr>
+            <td>{{ url.url }}</td>
+            {% if url.status %}
+                <td>{{ url.status }}</td>
+            {% else %}
+                <td></td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </table>
+    {{ render_pagination(urls) }}
+    <div class="row">
+        {% if (current_check and is_checking) %}
+            <div class="col-xs-6">
+                Идёт получение данных...
+            </div>
+            <div class="col-xs-6">
+                <a href="{{ url_for('core.check_stop', pk=current_check.id, job='check') }}">Остановить задачу</a>
+            </div>
+        {% else %}
+            <div class="col-xs-4">
+                <a href="{{ url_for('core.dataframe_check', pk=dataframe.id) }}">Запустить проверку</a>
+            </div>
+            <div class="col-xs-4 text-center">
+                <a href="{{ url_for('core.dataframe_edit', pk=dataframe.id) }}{% if current_check %}?check={{ current_check.id }}{% endif %}">Редактировать датафрейм</a>
+            </div>
+            <div class="col-xs-4  text-right">
+                <a href="{{ url_for('core.dataframe_delete', pk=dataframe.id) }}">Удалить датафрейм</a>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -2,10 +2,11 @@ from datetime import datetime
 from slugify import slugify
 import validators
 from rq.job import Job
+from rq.exceptions import NoSuchJobError
+from redis.exceptions import ConnectionError, ResponseError
 from rq.command import send_stop_job_command
 from sqlalchemy import UniqueConstraint
 from sqlalchemy.ext.associationproxy import association_proxy
-from sqlalchemy.sql import func
 from sqlalchemy.orm import validates
 from sqlalchemy.sql import expression
 from sqlalchemy.ext.compiler import compiles
@@ -15,6 +16,7 @@ from flask import current_app
 from app import db
 
 
+# utcnow for postgresql
 class utcnow(expression.FunctionElement):
     type = DateTime()
     inherit_cache = True
@@ -83,7 +85,7 @@ class Check(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     dataframe_id = db.Column(db.Integer, db.ForeignKey(DataFrame.id, ondelete='cascade'), nullable=False)
     name = db.Column(db.String(50), nullable=False, info={'label': 'Название'})
-    selectors = db.Column(db.Text, info={'label': 'Селекторы в json формате'})  # TODO delete when use Property
+    selectors = db.Column(db.Text, info={'label': 'Селекторы для извлечения данных'})  # TODO delete when use Property
     # for different dbs
     start_time = db.Column(db.DateTime, server_default=utcnow())
     #start_time = db.Column(db.DateTime, default=datetime.utcnow)
@@ -98,45 +100,60 @@ class Check(db.Model):
                                        lazy='select')
 
     def start(self, queue='default', **kwargs) -> Job:
-        job_id = self._get_getting_data_job_id()
+        job_id = self._get_check_data_job_id()
         app_queue = current_app.queue.get(queue, 'default')
-        job = app_queue.enqueue('app.tasks.check_dataframe', self.id, job_id=job_id, **kwargs)
+        job = app_queue.enqueue('app.core.tasks.check_dataframe', self.id, job_id=job_id, **kwargs)
 
         return job
 
     def stop(self):
-        job_id = self._get_getting_data_job_id()
+        job_id = self._get_check_data_job_id()
         self._stop_job(job_id)
 
-    def is_checking(self):
-        ...
+    def _is_busy(self, task: str) -> bool:
+        # check if a check has a job running
+        task_name = '_get_' + task + '_data_job_id'
+        con = self._get_queue_connection()
+        get_job_id = getattr(self, task_name)
+        job_id = get_job_id()
 
-    def extract_data(self, queue='default', **kwargs) -> Job:
-        if self.is_extracting_data():
+        try:
+            job = Job.fetch(job_id, connection=con)
+        except (ConnectionError, ResponseError, NoSuchJobError):
             return False
 
-        job_id = self._get_extracting_data_job_id()
-        app_queue = current_app.queue.get(queue, 'default')
-        job = app_queue.enqueue('app.tasks.extract_data_from_check', self.id, job_id=job_id, **kwargs)
-
-        return job
-
-    def stop_extract_data(self):
-        job_id = self._get_extracting_data_job_id()
-        self._stop_job(job_id)
-
-    def is_extracting_data(self) -> bool:
-        con = current_app.redis
-        job_id = self._get_extracting_data_job_id()
-        job = Job.fetch(job_id, connection=con)
         job_status = job.get_status()
 
         return job_status in ['queued', 'started']
 
-    def _get_extracting_data_job_id(self) -> str:
+    def is_checking(self):
+        return self._is_busy('check')
+
+    def extract_data(self, queue='default', **kwargs) -> Job:
+        #if self.is_extracting_data():
+            #return False
+
+        job_id = self._get_extract_data_job_id()
+        app_queue = current_app.queue.get(queue, 'default')
+        job = app_queue.enqueue('app.core.tasks.extract_data_from_check', self.id, job_id=job_id, **kwargs)
+
+        return job
+
+    def stop_extract_data(self):
+        job_id = self._get_extract_data_job_id()
+        self._stop_job(job_id)
+
+    def is_extracting_data(self) -> bool:
+        return self._is_busy('extract')
+
+    @staticmethod
+    def _get_queue_connection():
+        return current_app.redis
+
+    def _get_extract_data_job_id(self) -> str:
         return f'check_extract_data_{self.id}'
 
-    def _get_getting_data_job_id(self) -> str:
+    def _get_check_data_job_id(self) -> str:
         return f'check_get_data_{self.id}'
 
     @staticmethod
@@ -149,6 +166,8 @@ class Check(db.Model):
             send_stop_job_command(con, job_id)
         elif job_status == 'queued':
             job.cancel()
+
+        job.delete()
 
 
 class UrlCheck(db.Model):

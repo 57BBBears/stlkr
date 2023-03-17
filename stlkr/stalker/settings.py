@@ -55,6 +55,7 @@ DOWNLOADER_MIDDLEWARES = {
     'scrapy.downloadermiddlewares.retry.RetryMiddleware': None,
     'scrapy_fake_useragent.middleware.RandomUserAgentMiddleware': 400,
     'scrapy_fake_useragent.middleware.RetryUserAgentMiddleware': 401,
+    'scrapy.downloadermiddlewares.redirect.RedirectMiddleware': 600
     #'stalker.middlewares.StalkerDownloaderMiddleware': 543,
 }
 

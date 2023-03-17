@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'core/base.html' %}
 {% import 'bootstrap/wtf.html' as wtf %}
 {% from "bootstrap/pagination.html" import render_pagination %}
 
@@ -22,7 +22,7 @@
         {% for dataframe in dataframes.items %}
         <tr>
             <td><a href="{{ url_for('core.dataframe', pk=dataframe.id) }}">{{ dataframe.name }}</a></td>
-            <td>{{ dataframe.description }}</td>
+            <td>{% if dataframe.description  %}{{ dataframe.description }}{% endif %}</td>
             <td>{{ dataframe.url_count }}</td>
         </tr>
         {% endfor %}

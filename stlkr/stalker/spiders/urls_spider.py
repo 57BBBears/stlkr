@@ -3,6 +3,7 @@ import scrapy
 
 class UrlsSpider(scrapy.Spider):
     name = 'urls'
+    handle_httpstatus_list = [302]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

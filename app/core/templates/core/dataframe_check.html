@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'core/base.html' %}
 {% import 'bootstrap/wtf.html' as wtf %}
 
 {% block app_content %}
@@ -6,7 +6,9 @@
         <h1>{{ title }}</h1>
     {% endif %}
     <p>
-        {{ dataframe.description }}
+        {% if dataframe.description %}
+            {{ dataframe.description }}
+        {% endif %}
     </p>
     <form action="" method="post" class="form form-horizontal" role="form">
         {{ form.hidden_tag() }}

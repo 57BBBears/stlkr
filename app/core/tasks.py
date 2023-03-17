@@ -62,7 +62,7 @@ def handle_crawling_error(item, response, spider, failure):
 
 
 # Functions for retrieving data from a parsed url html
-def extract_data_from_check(pk: int, urls_per_check: int = None, only_new=False):
+def extract_data_from_check(pk: int, urls_per_check: int = None, only_new : bool = True):
     try:
         check = Check.query.get(pk)
         app.logger.info(f'Task "extract_data_from_check" has started. Check: {check}.')
@@ -75,29 +75,30 @@ def extract_data_from_check(pk: int, urls_per_check: int = None, only_new=False)
                 sys.exit()
 
             # get parsed urls for extracting data
-            parsed_urls = check.urls.filter_by(status=200)
+            parsed_urls = UrlCheck.query.filter_by(check=check, status=200)
             if only_new:
-                parsed_urls = parsed_urls.filter_by(extracted_data='')
+                parsed_urls = parsed_urls.filter_by(extracted_data=None)
             if urls_per_check is not None:
                 parsed_urls = parsed_urls.limit(urls_per_check)
 
-            data = []
-            while parsed_urls:
+            if parsed_urls:
+                data = []
                 for url in parsed_urls:
                     data.append(
-                        {'id': url.id, 'data': json.dumps(  # TODO check empty data?
+                        {'urlcheck_id': url.id, 'extracted_data': json.dumps(  # TODO check empty data?
                             parse_data_by_xpath(url.raw_data, selectors_dict)
                         )}
                     )
-
-                # update CheckUrls in DB
-                save_extracted_data_to_db(data)
-                db.session.commit()
+                    # TODO add limited bulk update
+                    # update CheckUrls in DB
+                    save_extracted_data_to_db(data)
+                    db.session.commit()
+                    data = []
             app.logger.info(f'Task "extract_data_from_check" has finished successfully. Check: {check}')
         else:
             app.logger.warning(f'Task "extract_data_from_check" has not started. No Check with pk: {pk}.')
-    except Exception:
-        app.logger.error('Task "check_extract_parsed_data" has crashed. Error: ', exc_info=True)
+    except Exception as e:
+        app.logger.error(f'Task "check_extract_parsed_data" has crashed. Error: {e}', exc_info=True)
 
 
 def save_extracted_data_to_db(data: list[dict[int, str]]):
@@ -106,12 +107,12 @@ def save_extracted_data_to_db(data: list[dict[int, str]]):
 
 
 def get_update_urlcheck_extracted_data_sql():
-    check_table = Check.__table__
+    check_table = UrlCheck.__table__
 
     return (
         check_table.update()
-        .where(check_table.c.id == bindparam('id'))
-        .values(extracted_data=bindparam('data'))
+        .where(check_table.c.id == bindparam('urlcheck_id'))
+        #.values(extracted_data=bindparam('extracted_data'))
     )
 
 
