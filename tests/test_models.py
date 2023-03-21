@@ -1,5 +1,5 @@
 import pytest
-from app.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster
+from app.core.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster
 
 
 @pytest.mark.usefixtures('setup_db')

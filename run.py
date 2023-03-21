@@ -1,5 +1,5 @@
 from app import create_app, db
-from app.models import Check, DataFrame
+from app.core.models import Check, DataFrame
 
 app = create_app()
 

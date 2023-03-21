@@ -3,8 +3,8 @@ from flask_wtf import FlaskForm
 from wtforms import TextAreaField, SubmitField, ValidationError, SelectField, SelectMultipleField
 from wtforms_alchemy import model_form_factory
 from app import db
-from app.models import DataFrame, Check, Cluster
-from app.utils import text_to_list
+from app.core.models import DataFrame, Check, Cluster
+from app.core.utils import text_to_list
 
 
 BaseModelForm = model_form_factory(FlaskForm)

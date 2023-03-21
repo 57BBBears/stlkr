@@ -1,12 +1,12 @@
 import json
-from flask import Blueprint, render_template, url_for, redirect, flash, request, current_app
-from app.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster
-from app.utils import text_to_list
+from flask import render_template, url_for, redirect, flash, request, current_app
+from app.core.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster
+from app.core.utils import text_to_list
 from app import db
 from datetime import datetime
 from redis.exceptions import ConnectionError, ResponseError
 from rq.exceptions import NoSuchJobError
-from app.utils import populate_object
+from app.core.utils import populate_object
 from app.core import bp
 from app.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm
 from app.core.tasks import parse_data_by_xpath
@@ -27,16 +27,16 @@ def dataframe(pk):
     per_page = request.args.get('per_page', current_app.config['URLS_PER_PAGE'], type=int)
 
     check_id = None
-    current_check = None
+    check = None
     is_checking = None
     is_extracting_data = None
     # TODO check connection - disable checking if connection error
     if df.checks:
         check_id = request.args.get('check', df.checks[0].id, type=int)
-        current_check = db.session.get(Check, check_id)
+        check = db.session.get(Check, check_id)
         try:
-            is_checking = current_check.is_checking()
-            is_extracting_data = current_check.is_extracting_data()
+            is_checking = check.is_checking()
+            is_extracting_data = check.is_extracting_data()
         except (ConnectionError, ResponseError) as e:
             current_app.logger.warning(f'Queue server is unavailable. {e}', exc_info=True)
             flash('Сервер задач не отвечает.', 'error')
@@ -44,10 +44,9 @@ def dataframe(pk):
             # no task queued for the check
             pass
         except AttributeError:
-            # current_check is None
+            # check is None
             flash(f'Проверка {check_id} не найдена.', 'warning')
 
-    print('is_checking-', is_checking, ' is_extracting_data-', is_extracting_data)
     urls = db.session.query(Url.url, UrlCheck.status)\
         .outerjoin(Url.checks.and_(UrlCheck.check_id == check_id))\
         .filter((Url.dataframe_id == df.id))\
@@ -55,7 +54,7 @@ def dataframe(pk):
 
     urls = urls.paginate(per_page=per_page)
 
-    return render_template('core/dataframe.html', dataframe=df, current_check=current_check,
+    return render_template('core/dataframe.html', dataframe=df, check=check,
                            is_extracting_data=is_extracting_data, is_checking=is_checking, urls=urls)
 
 
@@ -260,11 +259,11 @@ def check_extract_data(pk):
         data = check_test_selectors(check, check.selectors)
         flash(data)
 
-        return redirect(url_for('core.dataframe', pk=check.dataframe_id, current_check=check.id))
+        return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
 
     if check.is_extracting_data():
         flash(f'Обработка данных проверки "{check.name}" уже идёт.')
-        return redirect(url_for('core.dataframe', pk=check.dataframe_id, current_check=check.id))
+        return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
 
     # check weather we extract all data or only new
     kwargs = {}
@@ -280,7 +279,7 @@ def check_extract_data(pk):
         current_app.logger.error(f'Task "check_extract_data" has not launched. Error: {e}')
         flash(f'Ошибка запуска проверки "{check.name}". Сервер задач не отвечает.')
 
-    return redirect(url_for('core.dataframe', pk=check.dataframe_id, current_check=check.id))
+    return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
 
 def check_test_selectors(check: Check, selectors: str) -> str:
     url_check = UrlCheck.query.filter(UrlCheck.raw_data.isnot(None), UrlCheck.check==check, UrlCheck.status==200).first()
@@ -296,6 +295,17 @@ def check_test_selectors(check: Check, selectors: str) -> str:
         return 'Нет данных для проверки.'
 
     return data
+
+@bp.route('/check/<pk>/activate/')
+def check_activate(pk):
+    # makes current check active for its dataframe
+    check = Check.query.get_or_404(pk)
+    check.dataframe.check_id = check.id
+    db.session.commit()
+
+    flash(f'Проверка {check}  активирована для датафрейма {check.dataframe}.')
+    return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
+
 
 @bp.route('/check/<pk>/stop/')
 def check_stop(pk):
@@ -321,7 +331,7 @@ def check_stop(pk):
         current_app.logger.warning(f'Can not stop check {check}. No such job. {e}', exc_info=True)
         flash('Задача не найдена.')
 
-    return redirect(url_for('core.dataframe', pk=check.dataframe_id, current_check=check.id))
+    return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
 
 
 @bp.route('/cluster/<pk>/', methods=['GET', 'POST'])

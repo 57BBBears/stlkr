@@ -4,7 +4,7 @@ from datetime import datetime
 from scrapy import Selector
 from sqlalchemy import bindparam
 from app import create_app, db
-from app.models import DataFrame, Check, UrlCheck
+from app.core.models import Check, UrlCheck
 from stlkr import Stalker
 
 

@@ -3,6 +3,11 @@
 	{% block description %}{% endblock %}
 
 	{% block content %}
+	{% if data %}
+		{{ data }}
+	{% else %}
+		No
+	{% endif %}
 		<!-- BREADCRUMB -->
 		<div id="breadcrumb" class="section">
 			<!-- container -->
