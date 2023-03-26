@@ -46,6 +46,7 @@ class DataFrame(db.Model):
                              cascade='all, delete-orphan',
                              order_by='desc(Check.id)')
     clusters = db.relationship('Cluster', secondary='dataframe_cluster', back_populates='dataframes', lazy='select')
+    #properties = db.relationship('DataFrameProperty', secondary='DataFrameProperty', back_populates='dataframe', lazy='select')
 
     @property
     def url_count(self):
@@ -224,35 +225,32 @@ DataFrameCluster = db.Table(
     UniqueConstraint('dataframe_id', 'cluster_id', name='unique_dataframe_id_cluster_id')
 )
 
-
-# TODO use instead of UrlCheck.extracted_data and Check.selectors
-"""
 class Property(db.Model):
-    # Url property - data we get by parsing 
+    """ Dataframe settings for extracting data - selectors we get """
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False, info={'label': 'Название'})
+    code = db.Column(db.String(50), unique=True, nullable=False)
+
+    def __str__(self):
+        return self.name
+
+    #dataframes = db.relationship(DataFrame, secondary='DataFrameProperty', back_populates='properties', lazy='select')
+
+class DataFrameProperty(db.Model):
+    __tablename__ = 'dataframe_property'
     id = db.Column(db.Integer, primary_key=True)
     dataframe_id = db.Column(db.Integer, db.ForeignKey(DataFrame.id, ondelete='cascade'), nullable=False)
-    name = db.Column(db.String(50), nullable=False, info={'label': 'Имя'})
-    code = db.Column(db.String(50), nullable=False)
-
-    UniqueConstraint(dataframe_id, code, name='unique_dataframe_id_code')
-
-
-class CheckSelector(db.Model):
-    # A table for many to many Check-Property relation to fill selector for extracting data 
-    id = db.Column(db.Integer, primary_key=True)
-    check_id = db.Column(db.Integer, db.ForeignKey(Check.id, ondelete='cascade'), nullable=False)
     property_id = db.Column(db.Integer, db.ForeignKey(Property.id, ondelete='cascade'), nullable=False)
-    value = db.Column(db.Text, nullable=False)
+    selector = db.Column(db.String(50), nullable=False, info={'label': 'xpath'})
 
-    UniqueConstraint(check_id, property_id, name='unique_check_id_property_id')
-
+    UniqueConstraint(dataframe_id, property_id, name='unique_dataframe_id_property_id')
 
 class UrlProperty(db.Model):
-    # A table for many to many Url-Property relation 
+    """ A table for an Url-Check-Property relation """
     id = db.Column(db.Integer, primary_key=True)
-    urlcheck_id = db.Column(db.Integer, db.ForeignKey(UrlCheck.id, ondelete='cascade'))
-    property_id = db.Column(db.Integer, db.ForeignKey(Property.id, ondelete='cascade'))
-    value = db.Column(db.Text, nullable=False)
+    url_id = db.Column(db.Integer, db.ForeignKey(Url.id, ondelete='cascade'), nullable=False)
+    check_id = db.Column(db.Integer, db.ForeignKey(Check.id, ondelete='cascade'), nullable=False)
+    property_id = db.Column(db.Integer, db.ForeignKey(Property.id, ondelete='cascade'), nullable=False)
+    data = db.Column(db.Text, nullable=False)
 
-    UniqueConstraint(urlcheck_id, property_id, name='unique_urlcheck_id_property_id')
-"""
+    UniqueConstraint(url_id, check_id, property_id, name='unique_url_check_property')

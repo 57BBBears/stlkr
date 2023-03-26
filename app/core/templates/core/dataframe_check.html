@@ -12,6 +12,7 @@
     </p>
     <form action="" method="post" class="form form-horizontal" role="form">
         {{ form.hidden_tag() }}
+        {{ wtf.form_errors(form) }}
         {{ wtf.form_field(form.name) }}
         {{ wtf.form_field(form.selectors) }}
         {{ wtf.form_field(form.submit, class_='btn btn-primary') }}

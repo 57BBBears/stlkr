@@ -21,6 +21,7 @@
             <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
                 <ul class="nav navbar-nav">
                     <li><a href="{{ url_for('core.index') }}">Главная</a></li>
+                    <li><a href="{{ url_for('core.settings') }}">Настройки</a></li>
                 </ul>
 
                 <ul class="nav navbar-nav navbar-right">
@@ -48,4 +49,5 @@
 {% block scripts %}
     {{ super() }}
     <script src="{{ url_for('core.static', filename='js/core.js') }}"></script>
+    <link href="{{ url_for('core.static', filename='core.css') }}" rel="stylesheet" />
 {% endblock %}

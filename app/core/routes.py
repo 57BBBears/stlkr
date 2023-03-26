@@ -1,14 +1,15 @@
 import json
-from flask import render_template, url_for, redirect, flash, request, current_app
-from app.core.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster
-from app.core.utils import text_to_list
-from app import db
+from sqlalchemy import bindparam
 from datetime import datetime
 from redis.exceptions import ConnectionError, ResponseError
 from rq.exceptions import NoSuchJobError
-from app.core.utils import populate_object
+from flask import render_template, url_for, redirect, flash, request, current_app
+from app import db
+from app.core.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster, Property, DataFrameProperty
+from app.core.utils import text_to_list, populate_object
 from app.core import bp
-from app.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm
+from app.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm, PropertiesForm,\
+    DataFrameSelectorsForm
 from app.core.tasks import parse_data_by_xpath
 
 
@@ -20,6 +21,121 @@ def index():
 
     return render_template('core/index.html', title='Админка', dataframes=df, clusters=clusters)
 
+@bp.route('/settings/', methods=['GET', 'POST'])
+def settings():
+    properties = Property.query.order_by('id').all()
+    form = PropertiesForm()
+
+    if request.method == 'GET' and properties:
+        for prop in properties:
+            form.properties.append_entry(prop)
+
+    for _ in range(len(properties) - len(form.properties.entries) + 5):
+        # allways show additional 5 empty forms
+        form.properties.append_entry()
+
+    if form.validate_on_submit():
+        del_props = []
+        add_props = []
+        update_props = []
+
+        for i in range(len(form.properties)):
+            #print(form.properties[i].delete.data)
+
+            if form.properties[i].data['id'] and form.properties[i].data['delete']:
+                # delete property if checkbox is checked
+                del_props.append(form.properties[i].data['id'])
+            elif not form.properties[i].data['id'] and form.properties[i].data['name'] and form.properties[i].data['code']:
+                # add property if name and code are filled
+                add_props.append({'name': form.properties[i].data['name'], 'code': form.properties[i].data['code']})
+            elif form.properties[i].data['id'] and (form.properties[i].data['name'] != properties[i].name or
+                                                 form.properties[i].data['code'] != properties[i].code):
+                # update property if name or code has been changed
+                update_props.append({'pk': form.properties[i].data['id'], 'name': form.properties[i].data['name'],
+                                     'code': form.properties[i].data['code']})
+
+        if del_props:
+            db.session.execute(Property.__table__.delete().where(Property.id.in_(del_props)))
+
+        if update_props:
+            stmt = Property.__table__.update().where(Property.__table__.c.id==bindparam('pk')).values(
+                name=bindparam('name'), code=bindparam('code')
+            )
+            db.session.execute(stmt, update_props)
+
+        if add_props:
+            db.session.execute(Property.__table__.insert().values(add_props))
+
+        db.session.commit()
+
+        flash('Настройки обновлены.')
+
+        return redirect(url_for('core.settings'))
+
+    return render_template('core/settings.html', title='Настройки', form=form)
+
+@bp.route('/dataframe/<pk>/selectors/', methods=['GET', 'POST'])
+def dataframe_selectors(pk):
+    df = DataFrame.query.get_or_404(pk)
+    all_properties = Property.query.order_by('id').all()
+    # select properties of current dataframe
+    df_properties = DataFrameProperty.query.filter_by(dataframe_id=df.id).order_by(DataFrameProperty.id).all()
+    df_selectors = {}
+    for prop in df_properties:
+        df_selectors[prop.property_id] = prop.selector
+
+    #df_props = db.session.query(Property, DataFrameProperty).filter(DataFrameProperty.property_id==Property.id, DataFrameProperty.dataframe_id==df.id)
+
+    form = DataFrameSelectorsForm()
+    if request.method == 'GET':
+        for prop in all_properties:
+            # if dataframe has a selector for the property show it
+            cur_selector = df_selectors[prop.id] if prop.id in df_selectors else ''
+            form.selectors.append_entry({'id': prop.id, 'property': prop, 'selector': cur_selector})
+
+    if form.validate_on_submit():
+        update_props = []
+        add_props = []
+        del_props = []
+        for form_data in form.selectors.data:
+            if form_data['selector'] and int(form_data['id']) in df_selectors and \
+                    form_data['selector'] != df_selectors[int(form_data['id'])]:
+                # update selector
+                update_props.append({'prop_id': form_data['id'], 'selector': form_data['selector'].strip()})
+            elif form_data['selector'] and int(form_data['id']) not in df_selectors:
+                # add new selector
+                add_props.append({'dataframe_id': df.id,
+                                  'property_id': form_data['id'],
+                                  'selector': form_data['selector'].strip()})
+            elif int(form_data['id']) in df_selectors and not form_data['selector']:
+                # delete selectors from the dataframe
+                del_props.append(form_data['id'])
+
+        if update_props:
+            stmt = DataFrameProperty.__table__.update().where(
+                DataFrameProperty.dataframe_id==df.id,
+                DataFrameProperty.property_id==bindparam('prop_id')
+            ).values(selector=bindparam('selector'))
+
+            db.session.execute(stmt, update_props)
+
+        if add_props:
+            db.session.execute(DataFrameProperty.__table__.insert().values(add_props))
+
+        if del_props:
+            db.session.execute(DataFrameProperty.__table__.delete().where(
+                DataFrameProperty.dataframe_id==df.id,
+                DataFrameProperty.property_id.in_(del_props))
+            )
+
+        if any([update_props, add_props, del_props]):
+            db.session.commit()
+            flash("Селекторы изменены.")
+
+        return redirect(url_for('core.dataframe', pk=df.id))
+
+
+    return render_template('core/dataframe_selectors.html', title=f'Селекторы датафрейма "{df.name}"', form=form)
 
 @bp.route('/dataframe/<pk>/')
 def dataframe(pk):
@@ -135,7 +251,6 @@ def dataframe_edit(pk):
         return redirect(url_for('core.dataframe', pk=df.id))
 
     return render_template('core/dataframe_edit.html', title='Изменить датафрейм', form=form)
-
 
 @bp.route('/dataframe/<pk>/delete/', methods=['GET', 'POST'])
 def dataframe_delete(pk):
@@ -332,7 +447,6 @@ def check_stop(pk):
         flash('Задача не найдена.')
 
     return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
-
 
 @bp.route('/cluster/<pk>/', methods=['GET', 'POST'])
 def cluster(pk):
