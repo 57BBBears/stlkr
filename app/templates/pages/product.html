@@ -1,10 +1,10 @@
 {% extends 'pages/base.html' %}
-	{% block title %}{% endblock %}
+	{% block title %} {{ url['title']}} {% endblock %}
 	{% block description %}{% endblock %}
 
 {% block content %}
-	{% if url_data  %}
-		{{ url_data }}
+	{% if url  %}
+		{{ url }}
 	{% else %}
 		None
 	{% endif %}
@@ -99,7 +99,7 @@
 							<span class="product-available">In Stock</span>
 						</div>
 						<p>
-							{{ url_data.extracted_data }}
+
 						</p>
 
 						<div class="product-options">

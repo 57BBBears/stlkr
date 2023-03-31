@@ -1,3 +1,5 @@
+from scrapy import Selector
+
 def clear_url(url: str) -> str:
     if url := str(url).strip().lower():
         url_start = url.find(' ') + 1
@@ -19,3 +21,17 @@ def populate_object(obj, form, exclude=[]):
 
         if hasattr(obj, field_name):
             setattr(obj, field_name, field_value.data)
+
+def parse_data_by_xpath(source: str, selectors: dict) -> dict:
+    """ Return data as dict with given keys from selectors dict as keys
+    and extracted data as a value {selectors[id]: extarcted_data} """
+    data = {}
+    body = Selector(text=source)
+    for name, selector in selectors.items():
+        ext_data = body.xpath(selector).getall()
+        if len(ext_data) == 1:
+            ext_data = ext_data[0]
+
+        data[name] = ext_data
+
+    return data

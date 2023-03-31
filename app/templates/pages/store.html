@@ -3,11 +3,17 @@
 	{% block description %}{% endblock %}
 
 	{% block content %}
-	{% if data %}
-		{{ data }}
+	{% if urls %}
+		{{ urls }}
 	{% else %}
 		No
 	{% endif %}
+	{% for url in urls %}
+		{{ url.id }}<br/>
+		{{ url.title }}<br/>
+		{{ url.description }}<br/>
+		{{ url.name }}<br/>
+	{% endfor %}
 		<!-- BREADCRUMB -->
 		<div id="breadcrumb" class="section">
 			<!-- container -->

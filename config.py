@@ -40,6 +40,7 @@ class Config:
     # pagination
     URLS_PER_PAGE = int(os.environ.get('URLS_PER_PAGE') or 10)
     ITEMS_PER_PAGE = int(os.environ.get('ITEMS_PER_PAGE') or 10)
+    URLS_PER_PAGE = int(os.environ.get('URLS_PER_PAGE') or 30)
     # other
     REDIS_URL = os.environ.get('REDIS_URL')
     QUEUES = os.environ.get('QUEUES').split() or ['default']

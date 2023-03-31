@@ -1,17 +1,16 @@
 import json
-from sqlalchemy import bindparam
+from sqlalchemy import bindparam, func, and_, desc
 from datetime import datetime
 from redis.exceptions import ConnectionError, ResponseError
 from rq.exceptions import NoSuchJobError
-from flask import render_template, url_for, redirect, flash, request, current_app
+from flask import render_template, url_for, redirect, flash, request, current_app, abort
 from app import db
-from app.core.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster, Property, DataFrameProperty
-from app.core.utils import text_to_list, populate_object
+from app.core.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster, Property, DataFrameProperty, \
+    UrlProperty
+from app.core.utils import text_to_list, populate_object, parse_data_by_xpath
 from app.core import bp
 from app.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm, PropertiesForm,\
     DataFrameSelectorsForm
-from app.core.tasks import parse_data_by_xpath
-
 
 @bp.route('/')
 def index():
@@ -137,6 +136,31 @@ def dataframe_selectors(pk):
 
     return render_template('core/dataframe_selectors.html', title=f'Селекторы датафрейма "{df.name}"', form=form)
 
+@bp.route('/url/<pk>/')
+def url(pk):
+    urls_stmt = db.session.query(
+        Url.url, Check.name.label('check_name'), Property.name.label('property_name'), UrlProperty.data
+    ).outerjoin(
+        UrlCheck, UrlCheck.url_id==Url.id
+    ).outerjoin(
+        Check, UrlCheck.check_id==Check.id
+    ).outerjoin(
+        UrlProperty, and_(UrlProperty.url_id==Url.id, UrlProperty.check_id==Check.id)
+    ).outerjoin(
+        Property, Property.id==UrlProperty.property_id
+    ).where(Url.id==pk).order_by(desc(Check.id), Property.id)
+
+    if 'check' in request.args:
+        check_id = request.args.get('check', type=int)
+        urls_stmt = urls_stmt.filter(Check.id==check_id, UrlProperty.check_id==check_id)
+    print(urls_stmt)
+    url_data = urls_stmt.all()
+
+    if not url_data:
+        abort(404)
+
+    return render_template('core/url.html', urls=url_data)
+
 @bp.route('/dataframe/<pk>/')
 def dataframe(pk):
     df = DataFrame.query.get_or_404(pk)
@@ -148,7 +172,7 @@ def dataframe(pk):
     is_extracting_data = None
     # TODO check connection - disable checking if connection error
     if df.checks:
-        check_id = request.args.get('check', df.checks[0].id, type=int)
+        check_id = request.args.get('check', df.active_check.id if df.active_check else df.checks[0].id, type=int)
         check = db.session.get(Check, check_id)
         try:
             is_checking = check.is_checking()
@@ -163,10 +187,13 @@ def dataframe(pk):
             # check is None
             flash(f'Проверка {check_id} не найдена.', 'warning')
 
-    urls = db.session.query(Url.url, UrlCheck.status)\
-        .outerjoin(Url.checks.and_(UrlCheck.check_id == check_id))\
-        .filter((Url.dataframe_id == df.id))\
-        .order_by(UrlCheck.status.desc())
+    urls = db.session.query(
+        Url.id, Url.url, UrlCheck.status, func.count(UrlProperty.url_id).label('is_handled')
+    ).group_by(Url.id, Url.url, UrlCheck.status).outerjoin(
+        Url.checks.and_(UrlCheck.check_id == check_id)
+    ).outerjoin(UrlProperty, and_(UrlProperty.url_id==Url.id, UrlProperty.check_id==check_id)).filter(
+        Url.dataframe_id == df.id
+    ).order_by(UrlCheck.status.desc())
 
     urls = urls.paginate(per_page=per_page)
 
@@ -269,6 +296,21 @@ def dataframe_delete(pk):
 
     return render_template('core/delete.html', title=f'Удалить датафрейм "{df.name}" ?', description=df.description, form=form)
 
+def run_dataframe_check(check: Check) -> dict:
+    # Check if a message broker is available
+    try:
+        if job := check.start():
+            current_app.logger.info(f'Task "check_dataframe" has been launched. Task id: {job.get_id()}')
+        else:
+            current_app.logger.info(f'Task "check_dataframe" has not been launched. Something wrong with check.start')
+    except (ConnectionError, ResponseError) as e:
+        current_app.logger.error(f'Task "check_dataframe" has not been launched. Error: {e}')
+        return {'status': False, 'message': f'Ошибка запуска проверки "{check.name}". Сервер задач не отвечает.'}
+    except Exception as e:
+        current_app.logger.error(f'Task "check_dataframe" has not been launched. Error: {e}')
+        return {'status': False, 'message': f'Ошибка запуска проверки "{check.name}". Неизвестная ошибка.'}
+    else:
+        return {'status': True, 'message': f'Проверка "{check.name}" датафрейма "{check.dataframe.name}" запущена.'}
 
 @bp.route('/dataframe/<pk>/check/', methods=['GET', 'POST'])
 def dataframe_check(pk):
@@ -288,39 +330,43 @@ def dataframe_check(pk):
         form.name.data = datetime.now().strftime('%Y-%m-%d %H:%M')
 
     if form.validate_on_submit():
-        check = Check(dataframe=df, name=form.name.data, selectors=form.selectors.data)
+        check = Check(dataframe=df, name=form.name.data)
         db.session.add(check)
         db.session.commit()
-        # Check if a message broker is available
-        try:
-            if job := check.start():
-                current_app.logger.info(f'Task "check_dataframe" has been launched. Task id: {job.get_id()}')
-            else:
-                current_app.logger.info(f'Task "check_dataframe" has not been launched. Something wrong with check.start')
-        except (ConnectionError, ResponseError) as e:
-            current_app.logger.error(f'Task "check_dataframe" has not been launched. Error: {e}')
-            db.session.delete(check)
-            db.session.commit()
-            flash(f'Ошибка запуска проверки "{form.name.data}". Сервер задач не отвечает.')
-        except Exception as e:
-            current_app.logger.error(f'Task "check_dataframe" has not been launched. Error: {e}')
-            db.session.delete(check)
-            db.session.commit()
-            flash(f'Ошибка запуска проверки "{form.name.data}". Неизвестная ошибка.')
-        else:
-            flash(f'Проверка "{form.name.data}" датафрейма "{df.name}" запущена.')
 
-        return redirect(url_for('core.dataframe', pk=df.id))
+        result = run_dataframe_check(check)
+        flash(result['message'])
+
+        if not result['status']:
+            db.session.delete(check)
+            db.session.commit()
+            return redirect(url_for('core.dataframe', pk=df.id))
+
+        return redirect(url_for('core.dataframe', pk=df.id, check=check.id))
 
     return render_template('core/dataframe_check.html', dataframe=df, form=form,
                            title=f'Запустить проверку датафрейма "{df.name}" ?')
 
+@bp.route('/check/<pk>/recheck/')
+def dataframe_check_new(pk):
+    check = Check.query.get_or_404(pk)
+
+    if check.is_checking():
+        flash('Датафрейм уже проверяется.')
+        return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
+
+    result = run_dataframe_check(check)
+
+    flash(result['message'])
+
+    return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
 
 @bp.route('/check/<pk>/edit/', methods=['GET', 'POST'])
 def check_edit(pk):
     check = Check.query.get_or_404(pk)
 
     form = DataFrameCheckForm(obj=check)
+    form.submit.label.text = 'Сохранить'
 
     if form.validate_on_submit():
         form.populate_obj(check)
@@ -360,19 +406,18 @@ def check_delete(pk):
 
     return render_template('core/delete.html', title=f'Удалить проверку "{check.name}" ?', description=description, form=form)
 
-
-@bp.route('/check/<pk>/extract_data/')
+@bp.route('/check/<pk>/extract/')
 def check_extract_data(pk):
     check = Check.query.get_or_404(pk)
 
-    if not check.selectors:
-        flash(f'Заполните селекторы проверки "{check.name}".')
-        return redirect(url_for('core.check_edit', pk=check.id))
+    if not check.dataframe.properties:
+        flash(f'Перед извлечением данных заполните селекторы датафрейма.')
+        return redirect(url_for('core.dataframe_selectors', pk=check.dataframe.id))
 
-    # test selectors
-    if 'test' in request.args:
-        data = check_test_selectors(check, check.selectors)
-        flash(data)
+    # extracting selectors test
+    if url_limit :=request.args.get('test', type=int):
+        msg = get_check_test_msg(check, url_limit)
+        flash(msg)
 
         return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
 
@@ -396,20 +441,48 @@ def check_extract_data(pk):
 
     return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
 
-def check_test_selectors(check: Check, selectors: str) -> str:
-    url_check = UrlCheck.query.filter(UrlCheck.raw_data.isnot(None), UrlCheck.check==check, UrlCheck.status==200).first()
-    if url_check:
-        source = url_check.raw_data
-        try:
-            selectors_dict = json.loads(check.selectors)
-        except json.JSONDecodeError:
-            return 'Ошибка JSON декодирования селекторов.'
-        else:
-            data = parse_data_by_xpath(source, selectors_dict)
-    else:
-        return 'Нет данных для проверки.'
+def get_check_test_msg(check: Check, url_limit: int = None) -> str:
+    # get url address for urls of the check
+    check_urls = {check_url.url_id: check_url.url.url for check_url in check.urls}
 
-    return data
+    properties_all = Property.query.all()
+    properties = {prop.id: prop.name for prop in properties_all}
+
+    msg = ''
+    urls_extracted_data = extract_check_selectors(check.id, url_limit)
+    for url_data in urls_extracted_data:
+        msg += check_urls[url_data['url_id']] + '<br/>'
+        for prop_id in url_data['data']:
+            # replace url_id with url address
+            msg += f'"{properties[prop_id]}": {" ".join(url_data["data"][prop_id])}, '
+        msg = msg[:~1]
+        msg += '<br/>'
+
+    return msg
+
+def extract_check_selectors(check_id: int, url_limit: int = None) -> list:
+    query = db.session.query(UrlCheck.url_id, UrlCheck.raw_data).filter(UrlCheck.raw_data.isnot(None),
+                                                                        UrlCheck.check_id == check_id,
+                                                                        UrlCheck.status == 200)
+
+    if url_limit:
+        query = query.limit(url_limit)
+
+    url_checks = query.all()
+
+    if url_checks:
+        dataframe_id = db.session.query(Check.dataframe_id).where(Check.id==check_id).scalar_subquery()
+
+        selectors = db.session.query(Property.id, DataFrameProperty.selector).join(DataFrameProperty).where(
+            DataFrameProperty.dataframe_id==dataframe_id
+        ).order_by('id').all()
+
+        df_selectors = {selector.id: selector.selector for selector in selectors}
+        # returning key 'data' = {selector.id: extraxted_data}
+        return [{'check_id': check_id, 'url_id': url_check.url_id, 'data': parse_data_by_xpath(url_check.raw_data, df_selectors)}
+                for url_check in url_checks]
+    else:
+        return []
 
 @bp.route('/check/<pk>/activate/')
 def check_activate(pk):
@@ -426,7 +499,7 @@ def check_activate(pk):
 def check_stop(pk):
     check = Check.query.get_or_404(pk)
 
-    # stop certain job or both
+    # stop a certain job or both
     stop_param = 'job'
     stop_job = request.args.get(stop_param)
 

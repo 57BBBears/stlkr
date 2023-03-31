@@ -1,16 +1,11 @@
-import sys
-import json
 from datetime import datetime
-from scrapy import Selector
-from sqlalchemy import bindparam
 from app import create_app, db
-from app.core.models import Check, UrlCheck
+from app.core.models import Check, UrlCheck, DataFrameProperty, UrlProperty
+from app.core.utils import parse_data_by_xpath
 from stlkr import Stalker
-
 
 app = create_app()
 app.app_context().push()
-
 
 # Functions for dataframe check - parsing urls
 def check_dataframe(pk: int):
@@ -18,7 +13,7 @@ def check_dataframe(pk: int):
         check = Check.query.get(pk)
         app.logger.info(f'Task "check_dataframe" has started. Check: {check}.')
         if check:
-            # get urls for check (only urls that haven't been checked yet due to a pause (future feature))
+            # get urls for check (only urls that haven't been checked yet due to a pause or new ones)
             all_urls = set(check.dataframe.urls)
             # TODO recheck urls with non 200 status ?
             checked_urls = {url.url_id for url in check.urls}
@@ -53,9 +48,8 @@ def check_dataframe(pk: int):
                             f'Parsed {parsed_urls_count} urls.')
         else:
             app.logger.warning(f'Task "check_dataframe" has not started. No Check with pk: {pk}.')
-    except Exception:
-        app.logger.error('Task "check_dataframe" has crashed. Error: ', exc_info=True)
-
+    except Exception as e:
+        app.logger.error(f'Task "check_dataframe" has crashed. Error: {e}', exc_info=True)
 
 def handle_crawling_error(item, response, spider, failure):
     app.logger.error(f'Item {item} error: {failure}. Status: {response.status}. Spider: {spider}.')
@@ -67,56 +61,42 @@ def extract_data_from_check(pk: int, urls_per_check: int = None, only_new : bool
         check = Check.query.get(pk)
         app.logger.info(f'Task "extract_data_from_check" has started. Check: {check}.')
         if check:
-            # get check selectors
-            try:
-                selectors_dict = json.loads(check.selectors)
-            except json.JSONDecodeError:
-                app.logger.error('Task "extract_data_from_check" can\'t load selectors. Error: ', exc_info=True)
-                sys.exit()
-
             # get parsed urls for extracting data
             parsed_urls = UrlCheck.query.filter_by(check=check, status=200)
             if only_new:
-                parsed_urls = parsed_urls.filter_by(extracted_data=None)
+                parsed_urls = parsed_urls.outerjoin(UrlProperty,
+                                                    UrlCheck.check_id==UrlProperty.check_id
+                                                    ).filter(UrlProperty.data.is_(None))
             if urls_per_check is not None:
                 parsed_urls = parsed_urls.limit(urls_per_check)
 
-            if parsed_urls:
+            if not only_new:
+                # delete old data
+                db.session.execute(UrlProperty.__table__.delete().where(UrlProperty.check_id==check.id))
+                db.session.commit()
+
+            selectors = get_dataframe_selectors(check.dataframe.id)
+            data = []
+            for url in parsed_urls:
+                extracted_data = parse_data_by_xpath(url.raw_data, selectors)
+                for property_id, prop_data in extracted_data.items():
+                    if prop_data:
+                        data.append({'check_id': url.check_id,
+                                     'url_id': url.url_id,
+                                     'property_id': property_id,
+                                     'data': prop_data})
+                # TODO add limited bulk update
+                # insert new data into a database
+                db.session.execute(UrlProperty.__table__.insert(), data)
+                db.session.commit()
                 data = []
-                for url in parsed_urls:
-                    data.append(
-                        {'urlcheck_id': url.id, 'extracted_data': json.dumps(  # TODO check empty data?
-                            parse_data_by_xpath(url.raw_data, selectors_dict)
-                        )}
-                    )
-                    # TODO add limited bulk update
-                    # update CheckUrls in DB
-                    save_extracted_data_to_db(data)
-                    db.session.commit()
-                    data = []
             app.logger.info(f'Task "extract_data_from_check" has finished successfully. Check: {check}')
         else:
             app.logger.warning(f'Task "extract_data_from_check" has not started. No Check with pk: {pk}.')
     except Exception as e:
         app.logger.error(f'Task "check_extract_parsed_data" has crashed. Error: {e}', exc_info=True)
 
+def get_dataframe_selectors(df_id):
+    df_properties = DataFrameProperty.query.filter_by(dataframe_id=df_id).all()
+    return {prop.property_id: prop.selector for prop in df_properties}
 
-def save_extracted_data_to_db(data: list[dict[int, str]]):
-    stmt = get_update_urlcheck_extracted_data_sql()
-    db.session.execute(stmt, data)
-
-
-def get_update_urlcheck_extracted_data_sql():
-    check_table = UrlCheck.__table__
-
-    return (
-        check_table.update()
-        .where(check_table.c.id == bindparam('urlcheck_id'))
-        #.values(extracted_data=bindparam('extracted_data'))
-    )
-
-
-def parse_data_by_xpath(source: str, selectors: dict) -> dict:
-    body = Selector(text=source)
-
-    return {name: body.xpath(selectors[name]).getall() for name in selectors}

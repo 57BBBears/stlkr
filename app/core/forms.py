@@ -38,7 +38,7 @@ class EmptyForm(FlaskForm):
 class DataFrameCheckForm(ModelForm):
     class Meta:
         model = Check
-        only = ['name', 'selectors']
+        only = ['name']
 
     submit = SubmitField('Запустить')
 

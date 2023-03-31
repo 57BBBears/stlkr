@@ -31,7 +31,7 @@
                     {% endfor %}
                 </select>
             </div>
-            {% if (check and is_extracting_data) %}
+            {% if check and is_extracting_data %}
                 <div class="col-xs-6">
                     Идёт извлечение данных...
                     <a href="{{ url_for('core.check_stop', pk=check.id, job='extract') }}">Остановить задачу</a>
@@ -73,37 +73,42 @@
     <table class="table table-hover">
         <tr>
             <th>Url</th>
-            <th>Status</th>
+            <th>Статус</th>
+            <th>Обработан?</th>
         </tr>
         {% for url in urls.items %}
         <tr>
-            <td>{{ url.url }}</td>
-            {% if url.status %}
-                <td>{{ url.status }}</td>
+            {% if url.is_handled %}
+                <td><a href="{{ url_for('core.url', pk=url.id, check=check.id) }}">{{ url.url }}</a></td>
             {% else %}
-                <td></td>
+                <td>{{ url.url }}</td>
             {% endif %}
+            <td>{% if url.status %}{{ url.status }}{% else %}{% endif %}</td>
+            <td>{% if url.is_handled%}+{% else %}-{% endif %}</td>
         </tr>
         {% endfor %}
     </table>
     {{ render_pagination(urls) }}
     <div class="row">
-        {% if (check and is_checking) %}
+        {% if check and is_checking %}
             <div class="col-xs-6">
                 Идёт получение данных...
             </div>
             <div class="col-xs-6">
-                <a href="{{ url_for('core.check_stop', pk=check.id, job='check') }}">Остановить задачу</a>
+                <a href="{{ url_for('core.check_stop', pk=check.id, job='check') }}">Остановить проверку</a>
             </div>
         {% else %}
             <div class="col-xs-3">
                 <a href="{{ url_for('core.dataframe_check', pk=dataframe.id) }}">Запустить проверку</a>
+                <br/>
+                <br/>
+                <a href="{{ url_for('core.dataframe_check_new', pk=check.id) }}">Допроверить</a>
             </div>
             <div class="col-xs-3 text-center">
                 <a href="{{ url_for('core.dataframe_edit', pk=dataframe.id) }}{% if check %}?check={{ check.id }}{% endif %}">Редактировать датафрейм</a>
             </div>
             <div class="col-xs-3 text-center">
-                <a href="{{ url_for('core.dataframe_selectors', pk=dataframe.id) }}">Редактировать селекторы</a>
+                <a href="{{ url_for('core.dataframe_selectors', pk=dataframe.id) }}">Установить селекторы</a>
             </div>
             <div class="col-xs-3  text-right">
                 <a href="{{ url_for('core.dataframe_delete', pk=dataframe.id) }}">Удалить датафрейм</a>

@@ -1,4 +1,3 @@
-from datetime import datetime
 from slugify import slugify
 import validators
 from rq.job import Job
@@ -46,7 +45,7 @@ class DataFrame(db.Model):
                              cascade='all, delete-orphan',
                              order_by='desc(Check.id)')
     clusters = db.relationship('Cluster', secondary='dataframe_cluster', back_populates='dataframes', lazy='select')
-    #properties = db.relationship('DataFrameProperty', secondary='DataFrameProperty', back_populates='dataframe', lazy='select')
+    properties = db.relationship('DataFrameProperty', back_populates='dataframe', lazy='select')
 
     @property
     def url_count(self):
@@ -59,7 +58,6 @@ class DataFrame(db.Model):
 
     def __repr__(self):
         return self.name
-
 
 class Url(db.Model):
     """ Urls to check """
@@ -78,7 +76,6 @@ class Url(db.Model):
         return url
 
     UniqueConstraint(dataframe_id, url, name='unique_dataframe_id_url')
-
 
 class Check(db.Model):
     """ Check is used for url parsing - connects urls data with the dataframe """
@@ -112,7 +109,7 @@ class Check(db.Model):
         self._stop_job(job_id)
 
     def _is_busy(self, task: str) -> bool:
-        # check if a check has a job running
+        # check if the check has a job running
         task_name = '_get_' + task + '_data_job_id'
         con = self._get_queue_connection()
         get_job_id = getattr(self, task_name)
@@ -170,7 +167,6 @@ class Check(db.Model):
 
         job.delete()
 
-
 class UrlCheck(db.Model):
     """ A table for many to many Url-Check relationship """
     id = db.Column(db.Integer, primary_key=True)
@@ -178,7 +174,6 @@ class UrlCheck(db.Model):
     check_id = db.Column(db.Integer, db.ForeignKey(Check.id, ondelete='cascade'), nullable=False)
     status = db.Column(db.Integer)
     raw_data = db.Column(db.Text)
-    extracted_data = db.Column(db.Text)  #TODO delete when use Property
     # for different dbs ?
     check_time = db.Column(db.DateTime, server_default=utcnow())
     last_modified = db.Column(db.DateTime, onupdate=utcnow())
@@ -189,7 +184,6 @@ class UrlCheck(db.Model):
     check = db.relationship(Check, back_populates='urls')
 
     UniqueConstraint(url_id, check_id, name='unique_url_id_check_id')
-
 
 class Cluster(db.Model):
     """ Cluster unites dataframes, an analogue of section """
@@ -214,15 +208,12 @@ class Cluster(db.Model):
         if value and (not target.slug or value != oldvalue):
             target.slug = slugify(value)
 
-
 db.event.listen(Cluster.name, 'set', Cluster.slugify, retval=False)
-
 
 DataFrameCluster = db.Table(
     'dataframe_cluster',
-    db.Column('dataframe_id', db.Integer, db.ForeignKey(DataFrame.id, ondelete='cascade')),
-    db.Column('cluster_id', db.Integer, db.ForeignKey(Cluster.id, ondelete='cascade')),
-    UniqueConstraint('dataframe_id', 'cluster_id', name='unique_dataframe_id_cluster_id')
+    db.Column('dataframe_id', db.Integer, db.ForeignKey(DataFrame.id, ondelete='cascade'), primary_key=True),
+    db.Column('cluster_id', db.Integer, db.ForeignKey(Cluster.id, ondelete='cascade'), primary_key=True)
 )
 
 class Property(db.Model):
@@ -230,6 +221,8 @@ class Property(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False, info={'label': 'Название'})
     code = db.Column(db.String(50), unique=True, nullable=False)
+
+    dataframes = db.relationship('DataFrameProperty', back_populates='property', lazy='select')
 
     def __str__(self):
         return self.name
@@ -244,6 +237,9 @@ class DataFrameProperty(db.Model):
     selector = db.Column(db.String(50), nullable=False, info={'label': 'xpath'})
 
     UniqueConstraint(dataframe_id, property_id, name='unique_dataframe_id_property_id')
+
+    dataframe = db.relationship(DataFrame, back_populates='properties', lazy='select')
+    property = db.relationship(Property, back_populates='dataframes', lazy='select')
 
 class UrlProperty(db.Model):
     """ A table for an Url-Check-Property relation """
