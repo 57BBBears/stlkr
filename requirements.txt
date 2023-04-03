@@ -23,6 +23,7 @@ Faker==17.0.0
 filelock==3.7.1
 Flask==2.1.2
 Flask-Bootstrap==3.3.7.1
+Flask-Login==0.6.2
 Flask-Migrate==3.1.0
 Flask-SQLAlchemy==2.5.1
 Flask-WTF==1.0.1

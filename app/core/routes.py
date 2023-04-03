@@ -1,4 +1,3 @@
-import json
 from sqlalchemy import bindparam, func, and_, desc
 from datetime import datetime
 from redis.exceptions import ConnectionError, ResponseError

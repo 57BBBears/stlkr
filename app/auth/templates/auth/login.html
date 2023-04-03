@@ -1,0 +1,43 @@
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                <div class="alert alert-info" role="alert">{% autoescape false %} {{ message }} {% endautoescape %}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+{% block app_content %}
+
+    <h1>{% if title %}{{ title }}{% endif %}</h1>
+    {% if is_auth %}
+        You have logged in.
+    {% else %}
+        <form method="post" novalidate>
+            {{ form.hidden_tag() }}
+            <p>
+                {{ form.username.label }}<br/>
+                {{ form.username(size=32) }}
+                {% for error in form.username.errors %}
+                    <br/>
+                    <span style="color:red">{{ error }}</span>
+                {% endfor %}
+            </p>
+            <p>
+                {{ form.password.label }}<br/>
+                {{ form.password(size=32) }}
+                {% for error in form.password.errors %}
+                    <br/>
+                    <span style="color:red">{{ error }}</span>
+                {% endfor %}
+            </p>
+            <p>
+                {{ form.remember_me }} {{ form.remember_me.label }}
+            </p>
+            <p>
+                {{ form.submit }}
+            </p>
+        </form>
+    {% endif %}
+
+{% endblock %}
