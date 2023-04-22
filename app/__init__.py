@@ -27,7 +27,8 @@ def create_app(config_class=Config):
     Bootstrap(app)
 
     app.redis = Redis.from_url(app.config['REDIS_URL'])
-    app.queue = {queue: rq.Queue(queue, connection=app.redis) for queue in app.config['QUEUES']}
+    app.queue = {queue: rq.Queue(queue, connection=app.redis, default_timeout=app.config['TASK_EXECUTION_TIME'])
+                 for queue in app.config['QUEUES']}
 
     login.init_app(app)
     # routes

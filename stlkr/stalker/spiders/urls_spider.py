@@ -3,7 +3,7 @@ import scrapy
 
 class UrlsSpider(scrapy.Spider):
     name = 'urls'
-    handle_httpstatus_list = [302]
+    handle_httpstatus_list = [301, 302, 404]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -21,4 +21,10 @@ class UrlsSpider(scrapy.Spider):
                 self.start_urls = start_urls
 
     def parse(self, response, **kwargs):
-        yield {'url': response.url, 'status': response.status, 'data': response.text}
+        nodata_statuses = [302, 404]
+        if response.status in nodata_statuses:
+            data = ''
+        else:
+            data = response.text
+
+        yield {'url': response.url, 'status': response.status, 'data': data}

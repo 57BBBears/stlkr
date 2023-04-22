@@ -22,16 +22,17 @@ def populate_object(obj, form, exclude=[]):
         if hasattr(obj, field_name):
             setattr(obj, field_name, field_value.data)
 
-def parse_data_by_xpath(source: str, selectors: dict) -> dict:
+def parse_data_by_xpath(source: str, selectors: dict) -> dict[int, str]:
     """ Return data as dict with given keys from selectors dict as keys
     and extracted data as a value {selectors[id]: extarcted_data} """
     data = {}
     body = Selector(text=source)
-    for name, selector in selectors.items():
+    for sel_id, selector in selectors.items():
         ext_data = body.xpath(selector).getall()
-        if len(ext_data) == 1:
+        if ext_data and len(ext_data) == 1:
             ext_data = ext_data[0]
-
-        data[name] = ext_data
+        # add only nonempty values
+        if ext_data:
+            data[sel_id] = ext_data
 
     return data

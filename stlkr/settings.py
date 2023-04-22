@@ -3,3 +3,4 @@ from stlkr.stalker.settings import *
 
 SPIDER_MODULES = ['stlkr.stalker.spiders']
 NEWSPIDER_MODULE = 'stlkr.stalker.spiders'
+#TELNETCONSOLE_PASSWORD = '1123'

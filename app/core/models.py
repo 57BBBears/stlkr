@@ -4,7 +4,7 @@ from rq.job import Job
 from rq.exceptions import NoSuchJobError
 from redis.exceptions import ConnectionError, ResponseError
 from rq.command import send_stop_job_command
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import UniqueConstraint, distinct
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import validates
 from sqlalchemy.sql import expression
@@ -49,7 +49,7 @@ class DataFrame(db.Model):
 
     @property
     def url_count(self):
-        return Url.query.filter_by(dataframe=self).count()
+        return db.session.query(Url.id).filter_by(dataframe=self).count()
 
     def __init__(self, name, description = None):
         self.name = name
@@ -96,6 +96,14 @@ class Check(db.Model):
                                        foreign_keys='[DataFrame.check_id]',
                                        uselist=False,
                                        lazy='select')
+
+    @property
+    def checked_url_count(self):
+        return db.session.query(UrlCheck.id).filter_by(check=self).count()
+
+    @property
+    def handled_url_count(self):
+        return db.session.query(distinct(UrlProperty.url_id)).filter_by(check_id=self.id).count()
 
     def start(self, queue='default', **kwargs) -> Job:
         job_id = self._get_check_data_job_id()
@@ -173,10 +181,10 @@ class UrlCheck(db.Model):
     url_id = db.Column(db.Integer, db.ForeignKey(Url.id, ondelete='cascade'), nullable=False)
     check_id = db.Column(db.Integer, db.ForeignKey(Check.id, ondelete='cascade'), nullable=False)
     status = db.Column(db.Integer)
-    raw_data = db.Column(db.Text)
+    raw_data = db.Column(db.Text) # TODO default='' ?
     # for different dbs ?
     check_time = db.Column(db.DateTime, server_default=utcnow())
-    last_modified = db.Column(db.DateTime, onupdate=utcnow())
+    #last_modified = db.Column(db.DateTime, onupdate=utcnow())
     #check_time = db.Column(db.DateTime, default=datetime.utcnow)
     #last_modified = db.Column(db.DateTime, onupdate=datetime.utcnow)
 

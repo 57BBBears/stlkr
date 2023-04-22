@@ -4,12 +4,13 @@ from redis.exceptions import ConnectionError, ResponseError
 from rq.exceptions import NoSuchJobError
 from flask import render_template, url_for, redirect, flash, request, current_app, abort
 from app import db
+from app.core import bp
 from app.core.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster, Property, DataFrameProperty, \
     UrlProperty
 from app.core.utils import text_to_list, populate_object, parse_data_by_xpath
-from app.core import bp
 from app.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm, PropertiesForm,\
     DataFrameSelectorsForm
+from app.core.tasks import get_checked_urls_stmt, get_dataframe_selectors
 
 @bp.route('/')
 def index():
@@ -192,7 +193,7 @@ def dataframe(pk):
         Url.checks.and_(UrlCheck.check_id == check_id)
     ).outerjoin(UrlProperty, and_(UrlProperty.url_id==Url.id, UrlProperty.check_id==check_id)).filter(
         Url.dataframe_id == df.id
-    ).order_by(UrlCheck.status.desc())
+    ).order_by(UrlCheck.status.desc(), desc('is_handled'))
 
     urls = urls.paginate(per_page=per_page)
 
@@ -377,9 +378,9 @@ def check_edit(pk):
     return render_template('core/dataframe_check.html', dataframe=check.dataframe, form=form,
                            title=f'Изменить проверку "{check.name}" ?')
 
-
 @bp.route('/check/<pk>/delete/', methods=['GET', 'POST'])
 def check_delete(pk):
+    # TODO memmory error ? Make step by step deleting or use worker
     check = Check.query.get_or_404(pk)
     df = check.dataframe
 
@@ -388,8 +389,11 @@ def check_delete(pk):
 
     if form.validate_on_submit():
         try:
-            check.stop_extract_data()
-            check.stop()
+            if check.is_checking():
+                check.stop_extract_data()
+
+            if check.is_checking():
+                check.stop()
         except (ConnectionError, ResponseError) as e:
             current_app.logger.warning(f'Queue server is unavailable. {e}', exc_info=True)
         except NoSuchJobError:
@@ -415,7 +419,7 @@ def check_extract_data(pk):
 
     # extracting selectors test
     if url_limit :=request.args.get('test', type=int):
-        msg = get_check_test_msg(check, url_limit)
+        msg = get_check_test_msg(check.id, url_limit)
         flash(msg)
 
         return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
@@ -440,48 +444,51 @@ def check_extract_data(pk):
 
     return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
 
-def get_check_test_msg(check: Check, url_limit: int = None) -> str:
-    # get url address for urls of the check
-    check_urls = {check_url.url_id: check_url.url.url for check_url in check.urls}
+def get_check_test_msg(check_id: int, url_limit: int = None) -> str:
+    checked_urls = get_checked_urls_with_url_stmt(check_id, False, url_limit)
+    properties = {prop.id: prop.name for prop in Property.query}
 
-    properties_all = Property.query.all()
-    properties = {prop.id: prop.name for prop in properties_all}
+    df_id = db.session.query(Check.dataframe_id).filter_by(id=check_id).scalar()
+    df_properties = get_dataframe_selectors(df_id)
 
+    checked_urls_data = get_urls_data_by_selectors(checked_urls, df_properties, properties)
+
+    msg = get_msg_for_checked_urls(checked_urls_data)
+
+    return msg
+
+def get_urls_data_by_selectors(urls: list, selectors: dict[int, str], properties: dict[int: str]) -> dict[str, dict]:
+    urls_data = {}
+
+    for url_check in urls:
+        url_url = url_check.Url.url
+        parsed_data = parse_data_by_xpath(url_check.raw_data, selectors)
+        url_data = {}
+        for prop_id, prop_value in parsed_data.items():
+            # replace property id with a name of the property as a key
+            url_data[properties[prop_id]] = prop_value
+
+        urls_data[url_url] = url_data
+
+    return urls_data
+
+def get_checked_urls_with_url_stmt(*args, **kwargs):
+    checked_urls = get_checked_urls_stmt(*args, **kwargs).subquery()
+
+    return db.session.query(Url, checked_urls).join(checked_urls, Url.id==checked_urls.c.url_id)
+
+def get_msg_for_checked_urls(urls: dict) -> str:
     msg = ''
-    urls_extracted_data = extract_check_selectors(check.id, url_limit)
-    for url_data in urls_extracted_data:
-        msg += check_urls[url_data['url_id']] + '<br/>'
-        for prop_id in url_data['data']:
-            # replace url_id with url address
-            msg += f'"{properties[prop_id]}": {" ".join(url_data["data"][prop_id])}, '
+    for url_url, url_data in urls.items():
+        msg += url_url + '<br/>'
+        for prop_id, prop_value in url_data.items():
+            #msg += prop_id + ':' + ' '.join(prop_value) + ', '
+            msg += prop_id + ':' + prop_value + ', '
+
         msg = msg[:~1]
         msg += '<br/>'
 
     return msg
-
-def extract_check_selectors(check_id: int, url_limit: int = None) -> list:
-    query = db.session.query(UrlCheck.url_id, UrlCheck.raw_data).filter(UrlCheck.raw_data.isnot(None),
-                                                                        UrlCheck.check_id == check_id,
-                                                                        UrlCheck.status == 200)
-
-    if url_limit:
-        query = query.limit(url_limit)
-
-    url_checks = query.all()
-
-    if url_checks:
-        dataframe_id = db.session.query(Check.dataframe_id).where(Check.id==check_id).scalar_subquery()
-
-        selectors = db.session.query(Property.id, DataFrameProperty.selector).join(DataFrameProperty).where(
-            DataFrameProperty.dataframe_id==dataframe_id
-        ).order_by('id').all()
-
-        df_selectors = {selector.id: selector.selector for selector in selectors}
-        # returning key 'data' = {selector.id: extraxted_data}
-        return [{'check_id': check_id, 'url_id': url_check.url_id, 'data': parse_data_by_xpath(url_check.raw_data, df_selectors)}
-                for url_check in url_checks]
-    else:
-        return []
 
 @bp.route('/check/<pk>/activate/')
 def check_activate(pk):
@@ -492,7 +499,6 @@ def check_activate(pk):
 
     flash(f'Проверка {check}  активирована для датафрейма {check.dataframe}.')
     return redirect(url_for('core.dataframe', pk=check.dataframe_id, check=check.id))
-
 
 @bp.route('/check/<pk>/stop/')
 def check_stop(pk):

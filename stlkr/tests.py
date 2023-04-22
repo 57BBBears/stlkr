@@ -63,14 +63,18 @@ class TestStalker:
         assert stlkr.list() == []
 
     def test_run(self, get_spider_name, start_urls, stalker):
+        result = {}
         def stalker_item_callback(item):
-            assert item['status'] == 200
-            assert item['url'] == start_urls[200]
-            assert '<html>' in item['text']
+             nonlocal result
+             result = item
 
         stlkr = stalker[200]
         stlkr[get_spider_name].handle_item(stalker_item_callback)
         stlkr.run()
+
+        assert result['status'] == 200
+        assert result['url'] == start_urls[200][0]
+        assert '<title>' in result['data']
 
     def test_all(self, get_spider_name, stalker):
         assert stalker['empty'].all() == ['test', get_spider_name]

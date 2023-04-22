@@ -40,10 +40,12 @@ class Config:
     # pagination
     URLS_PER_PAGE = int(os.environ.get('URLS_PER_PAGE') or 10)
     ITEMS_PER_PAGE = int(os.environ.get('ITEMS_PER_PAGE') or 10)
-    URLS_PER_PAGE = int(os.environ.get('URLS_PER_PAGE') or 30)
-    # other
+    # parsing
     REDIS_URL = os.environ.get('REDIS_URL')
     QUEUES = os.environ.get('QUEUES').split() or ['default']
+    TASK_EXECUTION_TIME = int(os.environ.get('TASK_EXECUTION_TIME') or 600)
+    URLS_PER_EXTRACT = int(os.environ.get('URLS_PER_EXTRACT') or 10)
+    # other
     LOG_CONFIG = get_log_config(os.environ.get('LOG_CONFIG'))
     # api
 
