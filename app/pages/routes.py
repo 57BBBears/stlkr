@@ -3,7 +3,9 @@ from sqlalchemy import and_, select, text
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
 from app import db
 from app.pages import bp
-from app.core.models import Url, Check, UrlCheck, DataFrame, Cluster, DataFrameCluster, Property, UrlProperty
+from app.models import Dataframe, Url, Check, UrlCheck, Cluster, DataframeCluster, \
+    Property, UrlProperty
+
 
 @bp.route('/')
 def index():
@@ -14,9 +16,9 @@ def category(slug):
     cluster = Cluster.query.filter_by(slug=slug).first_or_404()
 
     # select all active checks of the dataframes of the cluster
-    cluster_active_checks = db.session.query(DataFrame.check_id.label('check_id')).join(DataFrameCluster).where(
-        DataFrameCluster.c.cluster_id==cluster.id,
-        DataFrame.check_id.isnot(None)
+    cluster_active_checks = db.session.query(Dataframe.check_id.label('check_id')).join(DataframeCluster).where(
+        DataframeCluster.c.cluster_id == cluster.id,
+        Dataframe.check_id.isnot(None)
     ).subquery()
 
     # select properties that are used in dataframes of the cluster
@@ -54,8 +56,8 @@ def category(slug):
 @bp.route('/catalog/<pk>.html')
 def detail(pk):
     active_check = db.session.query(Check.id).join(
-        DataFrame, DataFrame.check_id==Check.id
-    ).where(DataFrame.id==Url.dataframe_id, Url.id==pk).limit(1).scalar_subquery()
+        Dataframe, Dataframe.check_id == Check.id
+    ).where(Dataframe.id == Url.dataframe_id, Url.id == pk).limit(1).scalar_subquery()
 
     url_stmt = db.session.query(Property.code, UrlProperty.data).join(UrlProperty).where(
         UrlProperty.url_id==pk,

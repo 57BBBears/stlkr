@@ -5,7 +5,7 @@ from wtforms import TextAreaField, SubmitField, ValidationError, SelectField, Se
 from wtforms import validators
 from wtforms_alchemy import model_form_factory, QuerySelectField
 from app import db
-from app.core.models import DataFrame, Check, Cluster, Property
+from app.models import Dataframe, Check, Cluster, Property
 from app.core.utils import text_to_list
 
 
@@ -18,7 +18,7 @@ class ModelForm(BaseModelForm):
 
 class DataFrameForm(ModelForm):
     class Meta:
-        model = DataFrame
+        model = Dataframe
 
     urls = TextAreaField('Ссылки')
     submit = SubmitField('Сохранить')

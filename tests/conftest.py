@@ -1,4 +1,7 @@
 import pytest
+
+import app
+import app.models
 from app import create_app, db
 from config import TestingConfig
 
@@ -20,7 +23,7 @@ def setup_app(request, _get_app):
 def setup_db(request, _get_app):
     app = _get_app
     app.app_context().push()
-    request.cls.db = db
+    app.db = db
     db.create_all()
     yield
     db.session.remove()

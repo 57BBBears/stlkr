@@ -1,18 +1,21 @@
 from logging.config import dictConfig
 from flask import Flask, abort
 from flask_migrate import Migrate
-from flask_sqlalchemy import SQLAlchemy
 from flask_bootstrap import Bootstrap
 from flask_login import LoginManager, current_user
 from redis import Redis
 import rq
+
+from app.models import db, User
 from config import Config
 
-
-db = SQLAlchemy()
-migrate = Migrate()
 login = LoginManager()
+@login.user_loader
+def load_user(user_id: int):
+    return User.query.get(int(user_id))
 login.login_view = 'auth.login'
+migrate = Migrate()
+
 
 def create_app(config_class=Config):
     app = Flask(__name__, instance_relative_config=True)
@@ -39,7 +42,7 @@ def create_app(config_class=Config):
     @core_bp.before_request
     def only_admin_allowed():
         if not current_user.is_authenticated:
-            abort(404)
+            abort(403)
 
     app.register_blueprint(pages_bp)
     app.register_blueprint(core_bp, url_prefix='/admin')

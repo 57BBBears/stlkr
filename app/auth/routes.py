@@ -8,8 +8,6 @@ from app.auth import bp
 
 @bp.route('/login/', methods=['GET', 'POST'])
 def login():
-    is_auth = True if current_user.is_authenticated else False
-
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
@@ -22,7 +20,8 @@ def login():
 
         return redirect(url_for('auth.login'))
 
-    return render_template('auth/login.html', title='Login', form=form, is_auth=is_auth)
+    return render_template('auth/login.html', title='Login', form=form, is_auth=current_user.is_authenticated )
+
 
 @bp.route('/logout/')
 def logout():

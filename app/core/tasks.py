@@ -3,15 +3,15 @@ from datetime import datetime
 from sqlalchemy import exists, and_
 from sqlalchemy.orm import Query
 from app import create_app, db
-from app.core.models import Check, UrlCheck, DataFrameProperty, UrlProperty, Url
+from app.models import Url, Check, UrlCheck, DataframeProperty, UrlProperty
 from app.core.utils import parse_data_by_xpath
 from stlkr import Stalker
 
 app = create_app()
 app.app_context().push()
-#with app.app_context():
+
 def check_dataframe(pk: int):
-    """ Functions for dataframe check - parsing urls. """
+    """ Function for dataframe check - parsing urls. """
     try:
         check = Check.query.get(pk)
         app.logger.info(f'Task "check_dataframe" has started. Check: {check}.')
@@ -159,5 +159,5 @@ def get_checked_urls_stmt(check_id, only_new : bool = True, limit: int = 0, offs
 
 def get_dataframe_selectors(df_id: int) -> dict[int, str]:
     """ Return property selectors of the dataframe. """
-    df_properties = DataFrameProperty.query.filter_by(dataframe_id=df_id).all()
+    df_properties = DataframeProperty.query.filter_by(dataframe_id=df_id).all()
     return {prop.property_id: prop.selector for prop in df_properties}

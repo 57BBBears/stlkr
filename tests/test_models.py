@@ -1,16 +1,16 @@
 import pytest
-from app.core.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster
+from app.models import Dataframe, Url, Check, UrlCheck, Cluster, DataframeCluster
 
 
 @pytest.mark.usefixtures('setup_db')
 class TestModels:
     def test_create_models(self):
         # create a dataframe
-        df = DataFrame(name='test')
+        df = Dataframe(name='test')
         self.db.session.add(df)
         self.db.session.commit()
 
-        query = DataFrame.query.one()
+        query = Dataframe.query.one()
         assert query
         assert query.name == 'test'
 
@@ -43,7 +43,7 @@ class TestModels:
         assert df.active_check is check
 
         # dataframe active_check a one to one relationship test
-        another_df = DataFrame(name='foo')
+        another_df = Dataframe(name='foo')
         self.db.session.add(another_df)
         self.db.session.commit()
         with pytest.raises(AttributeError):
@@ -82,7 +82,7 @@ class TestModels:
         cluster.dataframes.append(df)
         cluster.dataframes.append(another_df)
         # count dataframes of a cluster
-        query = DataFrame.query.join(DataFrameCluster).filter_by(cluster_id=cluster.id).count()
+        query = Dataframe.query.join(DataframeCluster).filter_by(cluster_id=cluster.id).count()
         assert query == 2
 
         # set a parent cluster
@@ -94,7 +94,7 @@ class TestModels:
 
         # count clusters of a dataframe with two clusters
         df.clusters.append(another_cluster)
-        query = Cluster.query.join(DataFrameCluster).filter_by(dataframe_id=df.id).count()
+        query = Cluster.query.join(DataframeCluster).filter_by(dataframe_id=df.id).count()
         assert query == 2
 
     def test_delete_models(self):

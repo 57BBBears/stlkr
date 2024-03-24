@@ -3,10 +3,12 @@ from datetime import datetime
 from redis.exceptions import ConnectionError, ResponseError
 from rq.exceptions import NoSuchJobError
 from flask import render_template, url_for, redirect, flash, request, current_app, abort
+
+import app.models
 from app import db
 from app.core import bp
-from app.core.models import DataFrame, Url, Check, UrlCheck, Cluster, DataFrameCluster, Property, DataFrameProperty, \
-    UrlProperty
+from app.models import Dataframe, Url, Check, UrlCheck, Cluster, DataframeCluster, \
+    Property, DataframeProperty, UrlProperty
 from app.core.utils import text_to_list, populate_object, parse_data_by_xpath
 from app.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm, PropertiesForm,\
     DataFrameSelectorsForm
@@ -15,7 +17,7 @@ from app.core.tasks import get_checked_urls_stmt, get_dataframe_selectors
 @bp.route('/')
 def index():
     per_page = request.args.get('per_page', current_app.config['ITEMS_PER_PAGE'], type=int)
-    df = DataFrame.query.order_by(DataFrame.id).paginate(per_page=per_page)
+    df = Dataframe.query.order_by(Dataframe.id).paginate(per_page=per_page)
     clusters = Cluster.query.order_by(Cluster.id)
 
     return render_template('core/index.html', title='Админка', dataframes=df, clusters=clusters)
@@ -75,10 +77,10 @@ def settings():
 
 @bp.route('/dataframe/<pk>/selectors/', methods=['GET', 'POST'])
 def dataframe_selectors(pk):
-    df = DataFrame.query.get_or_404(pk)
+    df = Dataframe.query.get_or_404(pk)
     all_properties = Property.query.order_by('id').all()
     # select properties of current dataframe
-    df_properties = DataFrameProperty.query.filter_by(dataframe_id=df.id).order_by(DataFrameProperty.id).all()
+    df_properties = DataframeProperty.query.filter_by(dataframe_id=df.id).order_by(DataframeProperty.id).all()
     df_selectors = {}
     for prop in df_properties:
         df_selectors[prop.property_id] = prop.selector
@@ -111,20 +113,20 @@ def dataframe_selectors(pk):
                 del_props.append(form_data['id'])
 
         if update_props:
-            stmt = DataFrameProperty.__table__.update().where(
-                DataFrameProperty.dataframe_id==df.id,
-                DataFrameProperty.property_id==bindparam('prop_id')
+            stmt = DataframeProperty.__table__.update().where(
+                DataframeProperty.dataframe_id == df.id,
+                DataframeProperty.property_id == bindparam('prop_id')
             ).values(selector=bindparam('selector'))
 
             db.session.execute(stmt, update_props)
 
         if add_props:
-            db.session.execute(DataFrameProperty.__table__.insert().values(add_props))
+            db.session.execute(DataframeProperty.__table__.insert().values(add_props))
 
         if del_props:
-            db.session.execute(DataFrameProperty.__table__.delete().where(
-                DataFrameProperty.dataframe_id==df.id,
-                DataFrameProperty.property_id.in_(del_props))
+            db.session.execute(DataframeProperty.__table__.delete().where(
+                DataframeProperty.dataframe_id == df.id,
+                DataframeProperty.property_id.in_(del_props))
             )
 
         if any([update_props, add_props, del_props]):
@@ -163,7 +165,7 @@ def url(pk):
 
 @bp.route('/dataframe/<pk>/')
 def dataframe(pk):
-    df = DataFrame.query.get_or_404(pk)
+    df = Dataframe.query.get_or_404(pk)
     per_page = request.args.get('per_page', current_app.config['URLS_PER_PAGE'], type=int)
 
     check_id = None
@@ -206,7 +208,7 @@ def dataframe_add():
     form = DataFrameForm()
 
     if form.validate_on_submit():
-        df = DataFrame(name=form.name.data, description=form.description.data)
+        df = Dataframe(name=form.name.data, description=form.description.data)
         db.session.add(df)
         db.session.commit()
 
@@ -225,7 +227,7 @@ def dataframe_add():
 
 @bp.route('/dataframe/<pk>/edit/', methods=['GET', 'POST'])
 def dataframe_edit(pk):
-    df = DataFrame.query.get_or_404(pk)
+    df = Dataframe.query.get_or_404(pk)
     # If there is a dataframe check - add a response status for checked urls if exists else just show dataframe urls
     if df.checks:
         check_id = request.args.get('check', df.checks[0].id, type=int)
@@ -282,7 +284,7 @@ def dataframe_edit(pk):
 @bp.route('/dataframe/<pk>/delete/', methods=['GET', 'POST'])
 def dataframe_delete(pk):
     #TODO check running tasks of dataframe's checks before deleting?
-    df = DataFrame.query.get_or_404(pk)
+    df = Dataframe.query.get_or_404(pk)
     form = EmptyForm()
     form.button.label.text = 'Удалить'
 
@@ -315,7 +317,7 @@ def run_dataframe_check(check: Check) -> dict:
 @bp.route('/dataframe/<pk>/check/', methods=['GET', 'POST'])
 def dataframe_check(pk):
     # TODO check start frequency - do not start if prev check has start_time less than ... ?
-    df = DataFrame.query.get_or_404(pk)
+    df = Dataframe.query.get_or_404(pk)
 
     # check if dataframe is currently being checked
     # TODO change to check.is_checking - get current job's status at a queue by job_id ?
@@ -461,7 +463,7 @@ def get_urls_data_by_selectors(urls: list, selectors: dict[int, str], properties
     urls_data = {}
 
     for url_check in urls:
-        url_url = url_check.Url.url
+        url_url = app.models.Url.url
         parsed_data = parse_data_by_xpath(url_check.raw_data, selectors)
         url_data = {}
         for prop_id, prop_value in parsed_data.items():
@@ -541,7 +543,7 @@ def cluster(pk):
 
     current_frames = [df.name for df in clr.dataframes]
     # fill dataframes field
-    query = DataFrame.query.with_entities(DataFrame.id, DataFrame.name)
+    query = Dataframe.query.with_entities(Dataframe.id, Dataframe.name)
     form.frames.choices = [(df.name, df.name) for df in query]
 
 
@@ -558,20 +560,20 @@ def cluster(pk):
 
             if dataframes_for_del:
                 # delete from m2m table dataframe ids where select ids with names for deleting
-                db.session.execute(DataFrameCluster.delete().
-                                   where(DataFrameCluster.c.cluster_id == clr.id,
-                                         DataFrameCluster.c.dataframe_id.in_(
-                                             DataFrame.query.with_entities(DataFrame.id).filter(
-                                                 DataFrame.name.in_(dataframes_for_del)
+                db.session.execute(DataframeCluster.delete().
+                                   where(DataframeCluster.c.cluster_id == clr.id,
+                                         DataframeCluster.c.dataframe_id.in_(
+                                             Dataframe.query.with_entities(Dataframe.id).filter(
+                                                 Dataframe.name.in_(dataframes_for_del)
                                              )
                                          )
                                          )
                                    )
             if dataframes_for_add:
-                dataframes_for_add_ids = DataFrame.query.with_entities(DataFrame.id).filter(
-                                                 DataFrame.name.in_(dataframes_for_add)
+                dataframes_for_add_ids = Dataframe.query.with_entities(Dataframe.id).filter(
+                                                 Dataframe.name.in_(dataframes_for_add)
                                              )
-                db.session.execute(DataFrameCluster.insert(),
+                db.session.execute(DataframeCluster.insert(),
                                    [{'cluster_id': clr.id, 'dataframe_id': df_id} for df_id, in dataframes_for_add_ids])
 
         db.session.commit()
