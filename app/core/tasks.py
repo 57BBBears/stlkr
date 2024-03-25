@@ -2,19 +2,20 @@ import sys
 from datetime import datetime
 from sqlalchemy import exists, and_
 from sqlalchemy.orm import Query
-from app import create_app, db
+from app import db
 from app.models import Url, Check, UrlCheck, DataframeProperty, UrlProperty
 from app.core.utils import parse_data_by_xpath
 from stlkr import Stalker
+from logging import getLogger
 
-app = create_app()
-app.app_context().push()
+logger = getLogger(__name__)
+
 
 def check_dataframe(pk: int):
     """ Function for dataframe check - parsing urls. """
     try:
         check = Check.query.get(pk)
-        app.logger.info(f'Task "check_dataframe" has started. Check: {check}.')
+        logger.info(f'Task "check_dataframe" has started. Check: {check}.')
         if check:
             # get urls for check (only urls that haven't been checked yet due to a pause or new ones)
             #all_urls = set(check.dataframe.urls)
@@ -52,13 +53,13 @@ def check_dataframe(pk: int):
             db.session.commit()
             db.session.close()
 
-            app.logger.info(f'Task "check_dataframe" has finished successfully. Check: {check} '
+            logger.info(f'Task "check_dataframe" has finished successfully. Check: {check} '
                             f'All urls: {all_urls_count}. Already checked: {checked_urls_count}. '
                             f'Parsed {parsed_urls_count} urls.')
         else:
-            app.logger.warning(f'Task "check_dataframe" has not started. No Check with pk: {pk}.')
+            logger.warning(f'Task "check_dataframe" has not started. No Check with pk: {pk}.')
     except Exception as e:
-        app.logger.error(f'Task "check_dataframe" has crashed. Error: {e}', exc_info=True)
+        logger.error(f'Task "check_dataframe" has crashed. Error: {e}', exc_info=True)
 
 def get_unchecked_urls_stmt(check_id: int, limit: int = None):
     """ Select urls that don't have parsed data. """
@@ -74,17 +75,17 @@ def get_unchecked_urls_stmt(check_id: int, limit: int = None):
     return unchecked_urls_stmt
 
 def handle_crawling_error(item, response, spider, failure):
-    app.logger.error(f'Item {item} error: {failure}. Status: {response.status}. Spider: {spider}.')
+    logger.error(f'Item {item} error: {failure}. Status: {response.status}. Spider: {spider}.')
 
-def extract_data_from_check(pk: int, only_new : bool = True, urls_per_check: int = None):
+def extract_data_from_check(pk: int, urls_per_extract: int, max_urls: int = None, only_new : bool = True):
     """ A function for retrieving data from a parsed url html """
     # TODO add option extracting fixed parts of the selectors with regexp i.e. {url} {site} etc set in DataframeProperty
     try:
         check = Check.query.get(pk)
         if check:
-            app.logger.info(f'Task "extract_data_from_check" has started. Check: {check}.')
+            logger.info(f'Task "extract_data_from_check" has started. Check: {check}.')
         else:
-            app.logger.warning(f'Task "extract_data_from_check" has not started. No Check with pk: {pk}.')
+            logger.warning(f'Task "extract_data_from_check" has not started. No Check with pk: {pk}.')
             sys.exit()
 
         if not only_new:
@@ -92,11 +93,10 @@ def extract_data_from_check(pk: int, only_new : bool = True, urls_per_check: int
             db.session.execute(UrlProperty.__table__.delete().where(UrlProperty.check_id == check.id))
             db.session.commit()
 
-        if urls_per_check:
-            limit = min(app.config['URLS_PER_EXTRACT'], urls_per_check)
-            max_urls = urls_per_check
+        if max_urls:
+            limit = min(max_urls, urls_per_extract)
         else:
-            limit = app.config['URLS_PER_EXTRACT']
+            limit = urls_per_extract
             max_urls = float('inf')
 
         urls_count, parsed_urls_count = 0, 0
@@ -106,7 +106,7 @@ def extract_data_from_check(pk: int, only_new : bool = True, urls_per_check: int
         while (parsed_urls := get_checked_urls_stmt(pk, True, limit, offset).all()) and urls_count < max_urls:
             cur_urls_count = len(parsed_urls)
             parsed_urls_count += cur_urls_count
-            app.logger.debug(f'Extracted {cur_urls_count} urls.')
+            logger.debug(f'Extracted {cur_urls_count} urls.')
 
             urls_count += limit
 
@@ -129,12 +129,12 @@ def extract_data_from_check(pk: int, only_new : bool = True, urls_per_check: int
                 else:
                     offset += 1 # do not check an url without data again
 
-            app.logger.debug(f'Data for extracted urls saved.')
-        app.logger.info(f'Task "extract_data_from_check" has finished successfully. Check: {check}. '
+            logger.debug(f'Data for extracted urls saved.')
+        logger.info(f'Task "extract_data_from_check" has finished successfully. Check: {check}. '
                         f'Handled {parsed_urls_count} urls.')
 
     except Exception as e:
-        app.logger.error(f'Task "check_extract_parsed_data" has crashed. Error: {e}', exc_info=True)
+        logger.error(f'Task "check_extract_parsed_data" has crashed. Error: {e}', exc_info=True)
 
 def get_checked_urls_stmt(check_id, only_new : bool = True, limit: int = 0, offset: int = 0) -> Query:
     """ Get UrlChecks with parsed raw_data to extract selectors from there. """

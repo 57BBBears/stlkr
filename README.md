@@ -1,0 +1,1 @@
+Stalker walks throw the internet zone and crawls artifacts.

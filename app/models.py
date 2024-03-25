@@ -169,7 +169,9 @@ class Check(db.Model):
 
         job_id = self._get_extract_data_job_id()
         app_queue = current_app.queue.get(queue, 'default')
-        job = app_queue.enqueue('app.core.tasks.extract_data_from_check', self.id, job_id=job_id, **kwargs)
+        urls_per_extract = current_app.config['URLS_PER_EXTRACT']
+        job = app_queue.enqueue('app.core.tasks.extract_data_from_check',
+                                self.id, urls_per_extract, job_id=job_id, **kwargs)
 
         return job
 
