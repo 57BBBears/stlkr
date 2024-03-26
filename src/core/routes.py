@@ -4,15 +4,15 @@ from redis.exceptions import ConnectionError, ResponseError
 from rq.exceptions import NoSuchJobError
 from flask import render_template, url_for, redirect, flash, request, current_app, abort
 
-import app.models
-from app import db
-from app.core import bp
-from app.models import Dataframe, Url, Check, UrlCheck, Cluster, DataframeCluster, \
+import src.models
+from src import db
+from src.core import bp
+from src.models import Dataframe, Url, Check, UrlCheck, Cluster, DataframeCluster, \
     Property, DataframeProperty, UrlProperty
-from app.core.utils import text_to_list, populate_object, parse_data_by_xpath
-from app.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm, PropertiesForm,\
+from src.core.utils import text_to_list, populate_object, parse_data_by_xpath
+from src.core.forms import DataFrameForm, EmptyForm, DataFrameCheckForm, ClusterForm, ClusterAddForm, PropertiesForm,\
     DataFrameSelectorsForm
-from app.core.tasks import get_checked_urls_stmt, get_dataframe_selectors
+from src.core.tasks import get_checked_urls_stmt, get_dataframe_selectors
 
 @bp.route('/')
 def index():
@@ -463,7 +463,7 @@ def get_urls_data_by_selectors(urls: list, selectors: dict[int, str], properties
     urls_data = {}
 
     for url_check in urls:
-        url_url = app.models.Url.url
+        url_url = src.models.Url.url
         parsed_data = parse_data_by_xpath(url_check.raw_data, selectors)
         url_data = {}
         for prop_id, prop_value in parsed_data.items():

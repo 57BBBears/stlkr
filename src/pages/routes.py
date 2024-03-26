@@ -1,9 +1,9 @@
 from flask import render_template, abort, request, current_app
 from sqlalchemy import and_, select, text
 from sqlalchemy.exc import NoResultFound, MultipleResultsFound
-from app import db
-from app.pages import bp
-from app.models import Dataframe, Url, Check, UrlCheck, Cluster, DataframeCluster, \
+from src import db
+from src.pages import bp
+from src.models import Dataframe, Url, Check, UrlCheck, Cluster, DataframeCluster, \
     Property, UrlProperty
 
 

@@ -1,8 +1,8 @@
 import pytest
 
-import app
-import app.models
-from app import create_app, db
+import src
+import src.models
+from src import create_app, db
 from config import TestingConfig
 
 TESTING_CONFIG = TestingConfig

@@ -1,5 +1,5 @@
-from app import create_app, db
-from app.models import Dataframe, Check
+from src import create_app, db
+from src.models import Dataframe, Check
 
 app = create_app()
 

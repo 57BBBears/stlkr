@@ -29,6 +29,7 @@ wtforms-alchemy = "^0.18.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.3.4"
+pre-commit = "^3.7.0"
 
 [build-system]
 requires = ["poetry-core"]

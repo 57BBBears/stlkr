@@ -2,9 +2,9 @@ import sys
 from datetime import datetime
 from sqlalchemy import exists, and_
 from sqlalchemy.orm import Query
-from app import db
-from app.models import Url, Check, UrlCheck, DataframeProperty, UrlProperty
-from app.core.utils import parse_data_by_xpath
+from src import db
+from src.models import Url, Check, UrlCheck, DataframeProperty, UrlProperty
+from src.core.utils import parse_data_by_xpath
 from stlkr import Stalker
 from logging import getLogger
 

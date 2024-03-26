@@ -6,7 +6,7 @@ from flask_login import LoginManager, current_user
 from redis import Redis
 import rq
 
-from app.models import db, User
+from src.models import db, User
 from config import Config
 
 login = LoginManager()
@@ -35,9 +35,9 @@ def create_app(config_class=Config):
 
     login.init_app(app)
     # routes
-    from app.core import bp as core_bp
-    from app.pages import bp as pages_bp
-    from app.auth import bp as auth_bp
+    from src.core import bp as core_bp
+    from src.pages import bp as pages_bp
+    from src.auth import bp as auth_bp
 
     @core_bp.before_request
     def only_admin_allowed():

@@ -4,9 +4,9 @@ from wtforms import TextAreaField, SubmitField, ValidationError, SelectField, Se
     FieldList, FormField, StringField, HiddenField
 from wtforms import validators
 from wtforms_alchemy import model_form_factory, QuerySelectField
-from app import db
-from app.models import Dataframe, Check, Cluster, Property
-from app.core.utils import text_to_list
+from src import db
+from src.models import Dataframe, Check, Cluster, Property
+from src.core.utils import text_to_list
 
 
 BaseModelForm = model_form_factory(FlaskForm)
