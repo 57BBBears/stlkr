@@ -1,4 +1,3 @@
-from flask import Blueprint
+from src.pages.routes import bp
 
-bp = Blueprint('pages', __name__)
-from src.pages import routes
+__all__ = ["bp"]

@@ -47,10 +47,12 @@ services:
 
 #  worker:
 #    container_name: worker
-#    build: .
-#    command: ['celery', '-A', 'src.services.tasks.worker:celery', 'worker', '-P', 'gevent', '-c', '${TASK_CONCURRENCY}', '-l', '${TASK_LOG_LEVEL:-info}', '-f', '${TASK_LOG_FILE}']
+#    build:
+#      context: .
+#      target: development
 #    env_file:
-#      - production.env
+#      - .env
+#    command: ["rq", "worker", "-u", "redis://redis:6379",  "${QUEUES}"]
 #    restart: unless-stopped
 #    networks:
 #      - redis

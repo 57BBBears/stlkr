@@ -34,7 +34,7 @@ ENV PYTHONUNBUFFERED=1 \
     # this is where our requirements + virtual environment will live
     PYSETUP_PATH="/opt/pysetup" \
     VENV_PATH="/opt/pysetup/.venv" \
-    WORKDIR="/pozharka_api"
+    WORKDIR="/stlkr"
 
 
 
@@ -88,8 +88,12 @@ RUN --mount=type=cache,target=/root/.cache \
 # will become mountpoint of our code
 WORKDIR $WORKDIR
 
-EXPOSE 8000
-CMD ["uvicorn", "src.main:app", "--reload"]
+COPY app.py config.py ./
+COPY ./migrations migrations/
+COPY ./src src/
+
+EXPOSE 5000
+CMD ["gunicorn", "app:app", "-k gevent"]
 
 
 ################################
@@ -100,11 +104,11 @@ FROM python-base as production
 ENV FASTAPI_ENV=production
 COPY --from=builder-base $PYSETUP_PATH $PYSETUP_PATH
 
-RUN apt-get update && apt-get install --no-install-recommends -y curl
-
 WORKDIR $WORKDIR
-COPY alembic.ini docker-entrypoint.sh ./
-COPY ./alembic alembic/
+
+COPY docker-entrypoint.sh app.py config.py ./
+COPY ./migrations migrations/
 COPY ./src src/
 
+EXPOSE 5000
 RUN chmod +x ./docker-entrypoint.sh

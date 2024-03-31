@@ -1,25 +1,23 @@
 import pytest
 
-import src
-import src.models
-from src import create_app, db
 from config import TestingConfig
+from src import create_app, db
 
 TESTING_CONFIG = TestingConfig
 
 
-@pytest.fixture(scope='class', params=[TESTING_CONFIG])
+@pytest.fixture(scope="class", params=[TESTING_CONFIG])
 def _get_app(request):
-    print('Using config ' + request.param.__name__)
+    print("Using config " + request.param.__name__)
     return create_app(request.param)
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture(scope="class")
 def setup_app(request, _get_app):
     request.cls.app = _get_app
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture(scope="class")
 def setup_db(request, _get_app):
     app = _get_app
     app.app_context().push()
@@ -27,4 +25,3 @@ def setup_db(request, _get_app):
     db.create_all()
     yield
     db.session.remove()
-

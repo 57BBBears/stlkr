@@ -1,4 +1,3 @@
-from flask import Blueprint
+from src.core.routes import bp
 
-bp = Blueprint('core', __name__, template_folder='templates', static_folder='static')
-from src.core import routes
+__all__ = ["bp"]

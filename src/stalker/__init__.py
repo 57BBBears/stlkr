@@ -1,7 +1,8 @@
 import os
 from typing import Callable
+
 from scrapy import signals, spiderloader
-from scrapy.crawler import CrawlerProcess, Crawler
+from scrapy.crawler import Crawler, CrawlerProcess
 from scrapy.utils.project import get_project_settings
 
 
@@ -9,12 +10,20 @@ class Stalker:
     """
     Stalker is handle crawlers and init/start/stop process of crawling.
     """
+
     def __getitem__(self, item):
         return self._crawlers[item]
 
-    def __init__(self, name: str = None, settings: dict = None, extra_settings: dict = None, **kwargs):
+    def __init__(
+        self,
+        name: str = None,
+        settings: dict = None,
+        extra_settings: dict = None,
+        **kwargs,
+    ):
         """
-        Initialisation of scrapy project settings to get available spiders and prepare crawler process.
+        Initialisation of scrapy project settings to get available spiders
+        and prepare crawler process.
         :param name: Name of a scrapy spider.
         :param settings: Common project settings for crawl process and spider loader.
         :param extra_settings: Settings for a spider if param 'name' is set.
@@ -25,11 +34,13 @@ class Stalker:
         if settings:
             self.settings = settings.copy()
         else:
-            # stalker settings module with a path to project spiders accessible from out of the project root folder
-            stalker_settings = os.environ.get('STLKR_SETTINGS_MODULE', 'stlkr.settings')
+            # stalker settings module with a path to project spiders accessible from
+            # out of the project root folder
+            stalker_settings = os.environ.get("STLKR_SETTINGS_MODULE", "stlkr.settings")
 
-            # if there is an env var 'SCRAPY_SETTINGS_MODULE' rewrite it and restore after settings initialisation
-            scrapy_envvar = 'SCRAPY_SETTINGS_MODULE'
+            # if there is an env var 'SCRAPY_SETTINGS_MODULE' rewrite it
+            # and restore after settings initialisation
+            scrapy_envvar = "SCRAPY_SETTINGS_MODULE"
             cur_scrapy_envvar = os.environ.get(scrapy_envvar)
 
             # rewrite env 'SCRAPY_SETTINGS_MODULE' to get_project_settings
@@ -63,15 +74,17 @@ class Stalker:
 
     def add(self, name: str, settings: dict = None, **kwargs):
         """
-        Add a stalker crawler to crawl with while run. Raise an error if spider does not exist.
+        Add a stalker crawler to crawl with while run.
+        Raise an error if spider does not exist.
         :param name: Name of a project spider. Must exists.
         :param settings: Crawler settings.
         """
         if spider := self._get_spider_by_name(name):
-            self._crawlers[name] = StalkerCrawler(spider,
-                                                  self.settings.update(settings) if settings else self.settings,
-                                                  **kwargs
-                                                  )
+            self._crawlers[name] = StalkerCrawler(
+                spider,
+                self.settings.update(settings) if settings else self.settings,
+                **kwargs,
+            )
         else:
             raise ValueError(f"Crawler '{name}' doesn't exist.")
 
@@ -123,7 +136,7 @@ class StalkerCrawler(Crawler):
         self.params = kwargs
 
     def __str__(self):
-        return f'StalkerCrawler({self.spidercls})'
+        return f"StalkerCrawler({self.spidercls})"
 
     def handle_item(self, callback: Callable):
         # Connect spider with a function to save url data

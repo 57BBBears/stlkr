@@ -1,27 +1,38 @@
-import validators
 from flask_wtf import FlaskForm
-from wtforms import TextAreaField, SubmitField, ValidationError, SelectField, SelectMultipleField, BooleanField,\
-    FieldList, FormField, StringField, HiddenField
-from wtforms import validators
-from wtforms_alchemy import model_form_factory, QuerySelectField
-from src import db
-from src.models import Dataframe, Check, Cluster, Property
-from src.core.utils import text_to_list
+from wtforms import (
+    BooleanField,
+    FieldList,
+    FormField,
+    HiddenField,
+    SelectField,
+    SelectMultipleField,
+    StringField,
+    SubmitField,
+    TextAreaField,
+    ValidationError,
+    validators,
+)
+from wtforms_alchemy import model_form_factory
 
+from src import db
+from src.core.utils.text import text_to_list
+from src.models import Check, Cluster, Dataframe
 
 BaseModelForm = model_form_factory(FlaskForm)
+
 
 class ModelForm(BaseModelForm):
     @classmethod
     def get_session(cls):
         return db.session
 
+
 class DataFrameForm(ModelForm):
     class Meta:
         model = Dataframe
 
-    urls = TextAreaField('Ссылки')
-    submit = SubmitField('Сохранить')
+    urls = TextAreaField("Ссылки")
+    submit = SubmitField("Сохранить")
 
     def validate_urls(self, field):
         url_list = text_to_list(field.data)
@@ -32,64 +43,74 @@ class DataFrameForm(ModelForm):
         if not_urls:
             raise ValidationError(f'Это не ссылки: {", ".join(not_urls)}')
 
+
 class EmptyForm(FlaskForm):
-    button = SubmitField('')
+    button = SubmitField("")
+
 
 class DataFrameCheckForm(ModelForm):
     class Meta:
         model = Check
-        only = ['name']
+        only = ["name"]
 
-    submit = SubmitField('Запустить')
+    submit = SubmitField("Запустить")
+
 
 class ClusterAddForm(ModelForm):
     # TODO add js to ClusterForm to fill slug while name editing instead of this form
     class Meta:
         model = Cluster
-        only = ['name', 'title', 'description', 'excerpt', 'text', 'image']
+        only = ["name", "title", "description", "excerpt", "text", "image"]
 
-    parent_id = SelectField('Parent cluster', coerce=int)
+    parent_id = SelectField("Parent cluster", coerce=int)
 
-    submit = SubmitField('Добавить')
+    submit = SubmitField("Добавить")
+
 
 class ClusterForm(ModelForm):
     class Meta:
         model = Cluster
-        only = ['name', 'slug', 'title', 'description', 'excerpt', 'text', 'image']
+        only = ["name", "slug", "title", "description", "excerpt", "text", "image"]
 
-    parent_id = SelectField('Parent cluster', coerce=int)
+    parent_id = SelectField("Parent cluster", coerce=int)
     frames = SelectMultipleField(coerce=str)
 
-    submit = SubmitField('Сохранить')
+    submit = SubmitField("Сохранить")
+
 
 class PropertyForm(ModelForm):
     class Meta:
         csrf = False
 
-    id = HiddenField('')
-    name = StringField('', [validators.Length(max=50)])
-    code = StringField('', [validators.Length(max=50)])
-    delete = BooleanField('')
+    id = HiddenField("")
+    name = StringField("", [validators.Length(max=50)])
+    code = StringField("", [validators.Length(max=50)])
+    delete = BooleanField("")
 
     def validate_name(self, field):
         if not field.data and self.code.data:
-            raise ValidationError('Обязательное поле')
+            raise ValidationError("Обязательное поле")
+
     def validate_code(self, field):
         if not field.data and self.name.data:
-            raise ValidationError('Обязательное поле')
+            raise ValidationError("Обязательное поле")
+
 
 class PropertiesForm(FlaskForm):
     properties = FieldList(FormField(PropertyForm))
 
-    submit = SubmitField('Сохранить')
+    submit = SubmitField("Сохранить")
 
 
 class DataFrameSelectorForm(FlaskForm):
     class Meta:
         csrf = False
-    id = HiddenField('')
-    property = StringField('', [validators.Length(max=50)], render_kw={'readonly': True})
-    selector = StringField('', [validators.Length(max=50)])
+
+    id = HiddenField("")
+    property = StringField(
+        "", [validators.Length(max=50)], render_kw={"readonly": True}
+    )
+    selector = StringField("", [validators.Length(max=50)])
     """
     property = QuerySelectField(query_factory=lambda: Property.query,
                                 get_pk=lambda item: item.id,
@@ -103,7 +124,8 @@ class DataFrameSelectorForm(FlaskForm):
             raise ValidationError('Обязательное поле')
     """
 
+
 class DataFrameSelectorsForm(ModelForm):
     selectors = FieldList(FormField(DataFrameSelectorForm))
 
-    submit = SubmitField('Сохранить')
+    submit = SubmitField("Сохранить")
