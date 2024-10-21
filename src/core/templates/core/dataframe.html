@@ -103,7 +103,7 @@
             </div>
         {% else %}
             <div class="col-xs-3">
-                <a href="{{ url_for('core.dataframe_check', pk=dataframe.id) }}">Запустить проверку</a>
+                <a href="{{ url_for('core.check_dataframe', pk=dataframe.id) }}">Запустить проверку</a>
                 <br/>
                 <br/>
                 <a href="{{ url_for('core.dataframe_check_new', pk=check.id) }}">Допроверить</a>

@@ -36,7 +36,9 @@ class Stalker:
         else:
             # stalker settings module with a path to project spiders accessible from
             # out of the project root folder
-            stalker_settings = os.environ.get("STLKR_SETTINGS_MODULE", "stlkr.settings")
+            stalker_settings = os.environ.get(
+                "STLKR_SETTINGS_MODULE", "src.stalker.settings"
+            )
 
             # if there is an env var 'SCRAPY_SETTINGS_MODULE' rewrite it
             # and restore after settings initialisation

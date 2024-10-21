@@ -176,7 +176,7 @@ class Check(db.Model):
         job_id = self._get_check_data_job_id()
         app_queue = current_app.queue.get(queue, "default")
         job = app_queue.enqueue(
-            "app.core.tasks.check_dataframe", self.id, job_id=job_id, **kwargs
+            "src.core.tasks.check_dataframe", self.id, job_id=job_id, **kwargs
         )
 
         return job
@@ -211,7 +211,7 @@ class Check(db.Model):
         job_id = self._get_extract_data_job_id()
         app_queue = current_app.queue.get(queue, "default")
         job = app_queue.enqueue(
-            "app.core.tasks.extract_data_from_check", self.id, job_id=job_id, **kwargs
+            "src.core.tasks.extract_data_from_check", self.id, job_id=job_id, **kwargs
         )
 
         return job
@@ -262,8 +262,8 @@ class UrlCheck(db.Model):
     status = db.Column(db.Integer)
     raw_data = db.Column(db.Text, default="", nullable=False)
     check_time = db.Column(db.DateTime, server_default=utcnow())
+    last_modified = db.Column(db.DateTime, onupdate=utcnow())
     # for different dbs ?
-    # last_modified = db.Column(db.DateTime, onupdate=utcnow())
     # check_time = db.Column(db.DateTime, default=datetime.utcnow)
     # last_modified = db.Column(db.DateTime, onupdate=datetime.utcnow)
 

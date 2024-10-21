@@ -20,12 +20,13 @@ scrapy-fake-useragent = "^1.4.4"
 sqlalchemy = "^2.0.29"
 sqlalchemy-utils = "^0.41.1"
 flask-bootstrap = "^3.3.7.1"
-slugify = "^0.0.1"
 validators = "^0.24.0"
 python-dotenv = "^1.0.1"
 wtforms-alchemy = "^0.18.0"
 psycopg2-binary = "^2.9.9"
 gunicorn = {extras = ["gevent"], version = "^21.2.0"}
+pytest = "^8.3.3"
+python-slugify = "^8.0.4"
 
 
 [tool.poetry.group.dev.dependencies]

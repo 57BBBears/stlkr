@@ -1,3 +1,4 @@
+import os
 from logging.config import dictConfig
 
 import rq
@@ -7,7 +8,6 @@ from flask_login import LoginManager, current_user
 from flask_migrate import Migrate
 from redis import Redis
 
-from config import Config
 from src.models import User, db
 
 login = LoginManager()
@@ -22,9 +22,10 @@ login.login_view = "auth.login"
 migrate = Migrate()
 
 
-def create_app(config_class=Config):
+def create_app():
     app = Flask(__name__, instance_relative_config=True)
-    app.config.from_object(config_class)
+    config = os.getenv("CONFIG", "config.Config")
+    app.config.from_object(config)
 
     if app.config["LOG_CONFIG"] is not None:
         dictConfig(app.config["LOG_CONFIG"])

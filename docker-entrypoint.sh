@@ -1,4 +1,4 @@
 #!/bin/bash
-alembic upgrade head
+flask db upgrade
 
-gunicorn src.main:app -w ${WORKERS} -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000
+gunicorn app:app -w ${WORKERS} -k uvicorn.workers.UvicornWorker -b 0.0.0.0:5000

@@ -6,7 +6,7 @@ from os import getenv
 from dotenv import load_dotenv
 
 base_dir = os.path.abspath(os.path.dirname(__file__))
-load_dotenv(os.path.join(base_dir, "instance/.env"))
+load_dotenv(os.path.join(base_dir, ".env"))
 
 
 def get_log_config(file):

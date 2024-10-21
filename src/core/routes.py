@@ -13,8 +13,8 @@ from flask import (
 from redis.exceptions import ConnectionError, ResponseError
 from rq.exceptions import NoSuchJobError
 from sqlalchemy import and_, bindparam, desc, func, insert
+from sqlalchemy.orm import Query
 
-import src.models
 from src import db
 from src.core.forms import (
     ClusterAddForm,
@@ -474,7 +474,7 @@ def run_dataframe_check(check: Check) -> dict:
 
 
 @bp.route("/dataframe/<pk>/check/", methods=["GET", "POST"])
-def dataframe_check(pk):
+def check_dataframe(pk):
     # TODO check start frequency - do not start if prev check has start_time
     #  less than ... ?
     df = Dataframe.query.get_or_404(pk)
@@ -646,8 +646,9 @@ def get_check_test_msg(check_id: int, url_limit: int = None) -> str:
     df_properties = get_dataframe_selectors(df_id)
 
     checked_urls = get_checked_urls_with_url_stmt(check_id, False, url_limit)
+
     checked_urls_data = get_urls_data_by_selectors(
-        checked_urls, df_properties, properties
+        checked_urls.all(), df_properties, properties
     )
 
     msg = get_msg_for_checked_urls(checked_urls_data)
@@ -656,12 +657,19 @@ def get_check_test_msg(check_id: int, url_limit: int = None) -> str:
 
 
 def get_urls_data_by_selectors(
-    urls: list, selectors: dict[int, str], properties: dict[int:str]
+    urls: Query, selectors: dict[int, str], properties: dict[int, dict[str, str]]
 ) -> dict[str, dict]:
+    """
+
+    :param urls: Sqlalchemy Row with url and UrlCheck
+    :param selectors:
+    :param properties:
+    :return: dict with url as keys and dict of [Selector name, Selector value] as values
+    """
     urls_data = {}
 
     for url_check in urls:
-        url_url = src.models.Url.url
+        url_url = url_check.Url.url
         parsed_data = parse_data_by_xpath(url_check.raw_data, selectors)
         url_data = {}
         for prop_id, prop_value in parsed_data.items():
@@ -673,7 +681,7 @@ def get_urls_data_by_selectors(
     return urls_data
 
 
-def get_checked_urls_with_url_stmt(*args, **kwargs):
+def get_checked_urls_with_url_stmt(*args, **kwargs) -> Query:
     checked_urls = get_checked_urls_stmt(*args, **kwargs).subquery()
 
     return db.session.query(Url, checked_urls).join(
@@ -687,9 +695,9 @@ def get_msg_for_checked_urls(urls: dict) -> str:
         msg += url_url + "<br/>"
         for prop_id, prop_value in url_data.items():
             # msg += prop_id + ':' + ' '.join(prop_value) + ', '
-            msg += prop_id + ":" + prop_value + ", "
+            msg += f"{prop_id}: {prop_value} , "
 
-        msg = msg[:~1]
+        msg = msg[:-2]
         msg += "<br/>"
 
     return msg

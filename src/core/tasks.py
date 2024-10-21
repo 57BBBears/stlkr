@@ -18,8 +18,8 @@ app.app_context().push()
 def check_dataframe(pk: int):
     """Function for dataframe check - parsing urls."""
     try:
+        app.logger.info(f'Task "check_dataframe" has started. Check id: {pk}.')
         check = Check.query.get(pk)
-        app.logger.info(f'Task "check_dataframe" has started. Check: {check}.')
         if check:
             # get urls for check (only urls that haven't been checked yet due to a pause
             # or new ones)
@@ -91,7 +91,15 @@ def check_dataframe(pk: int):
 
 
 def extract_data_from_check(pk: int, only_unchecked: bool = True, max_urls: int = None):
-    """A function for retrieving data from a parsed url html"""
+    """
+    Retrieving data from a parsed url html
+    :param pk: Check id
+    :param only_unchecked: weather extract data from unchecked urls or cancel previous
+    extraction and reextract all urls again
+    :param max_urls: max amount of handling urls
+    :return:
+    """
+    """"""
     # TODO add option extracting fixed parts of the selectors with regexp i.e.
     #  {url} {site} etc set in DataframeProperty
     try:
