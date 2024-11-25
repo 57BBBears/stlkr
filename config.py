@@ -29,9 +29,7 @@ class Config:
     TESTING = False
     SECRET_KEY = getenv("SECRET_KEY")
     # db
-    SQLALCHEMY_DATABASE_URI = getenv(
-        "SQLALCHEMY_DATABASE_URI"
-    ) or "sqlite:///" + os.path.join(base_dir, "instance/app.db")
+    SQLALCHEMY_DATABASE_URI = getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # mail
     MAIL_SERVER = getenv("MAIL_SERVER")
@@ -40,7 +38,7 @@ class Config:
     MAIL_USERNAME = getenv("MAIL_USERNAME")
     MAIL_PASSWORD = getenv("MAIL_PASSWORD")
     MAIL_FROM = getenv("MAIL_FROM")
-    ADMINS = ["admin@test.com"]
+    ADMINS = ("admin@test.com",)
     # pagination
     URLS_PER_PAGE = int(getenv("URLS_PER_PAGE") or 10)
     ITEMS_PER_PAGE = int(getenv("ITEMS_PER_PAGE") or 10)

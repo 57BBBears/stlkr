@@ -11,7 +11,7 @@ def get_unchecked_urls_stmt(check_id: int, limit: int = None):
         db.session.query(Check.dataframe_id).filter_by(id=check_id).scalar_subquery()
     )
 
-    unchecked_urls_stmt = db.session.query(Url.id, Url.url).where(
+    unchecked_urls_stmt = db.session.query(Url.id, Url.address).where(
         and_(
             Url.dataframe_id == df_id,
             ~exists().where(Url.id == UrlCheck.url_id, UrlCheck.check_id == check_id),

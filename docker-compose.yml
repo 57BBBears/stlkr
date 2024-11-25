@@ -12,7 +12,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     networks:
-      - postgres
+      - app
     restart: unless-stopped
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_DB}" ]
@@ -33,55 +33,52 @@ services:
       - "${PGADMIN_PORT:-5050}:80"
     restart: unless-stopped
     networks:
-      - postgres
+      - app
 
-  redis:
-    container_name: redis
-    image: redis:7.2.3
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    restart: unless-stopped
-    networks:
-      - redis
-
-  worker:
-    container_name: worker
-    build:
-      context: .
-      target: development
-    environment:
-      SQLALCHEMY_DATABASE_URI: postgresql://stlkr:1123@postgres:5432/stlkr
-    env_file:
-      - .env
-    command: ["rq", "worker", "-u", "redis://redis:6379",  "high", "default", "low"]
-    restart: unless-stopped
-    networks:
-      - redis
-      - postgres
-    depends_on:
-      - redis
-      - postgres
-
-  rq-dashboard:
-    container_name: rq-dashboard
-    image: cjlapao/rq-dashboard:latest
-    ports:
-      - '9181:9181'
-    environment:
-      RQ_DASHBOARD_REDIS_URL: redis://redis:6379
-      # RQ_DASHBOARD_USERNAME: rq
-      RQ_DASHBOARD_PASSWORD: 1123
-    networks:
-      - redis
-    depends_on:
-      - redis
+#  redis:
+#    container_name: redis
+#    image: redis:7.2.3
+#    ports:
+#      - "${REDIS_PORT:-6379}:6379"
+#    restart: unless-stopped
+#    networks:
+#      - app
+#
+#  worker:
+#    container_name: worker
+#    build:
+#      context: .
+#      target: development
+#    environment:
+#      SQLALCHEMY_DATABASE_URI: postgresql://stlkr:1123@postgres:5432/stlkr
+#    env_file:
+#      - .env
+#    command: ["rq", "worker", "-u", "redis://redis:6379",  "high", "default", "low"]
+#    restart: unless-stopped
+#    networks:
+#      - app
+#    depends_on:
+#      - redis
+#      - postgres
+#
+#  rq-dashboard:
+#    container_name: rq-dashboard
+#    image: cjlapao/rq-dashboard:latest
+#    ports:
+#      - '9181:9181'
+#    environment:
+#      RQ_DASHBOARD_REDIS_URL: redis://redis:6379
+#      # RQ_DASHBOARD_USERNAME: rq
+#      RQ_DASHBOARD_PASSWORD: 1123
+#    networks:
+#      - app
+#    depends_on:
+#      - redis
 
 volumes:
   database:
   pgadmin:
 
 networks:
-  postgres:
-    driver: bridge
-  redis:
+  app:
     driver: bridge

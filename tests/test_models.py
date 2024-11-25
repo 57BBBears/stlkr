@@ -1,16 +1,16 @@
 import pytest
 
-from src.models import Check, Cluster, Dataframe, DataframeCluster, Url, UrlCheck
+from src.models import Check, Cluster, DataframeCluster, Resource, Url, UrlCheck
 
 
 class TestModels:
     def test_create_models(self, session):
         # create a dataframe
-        df = Dataframe(name="test")
+        df = Resource(name="test")
         session.add(df)
         session.commit()
 
-        query = Dataframe.query.one()
+        query = Resource.query.one()
         assert query
         assert query.name == "test"
 
@@ -43,7 +43,7 @@ class TestModels:
         assert df.active_check is check
 
         # dataframe active_check a one to one relationship test
-        another_df = Dataframe(name="foo")
+        another_df = Resource(name="foo")
         session.add(another_df)
         session.commit()
         with pytest.raises(AttributeError):
@@ -83,7 +83,7 @@ class TestModels:
         cluster.dataframes.append(another_df)
         # count dataframes of a cluster
         query = (
-            Dataframe.query.join(DataframeCluster)
+            Resource.query.join(DataframeCluster)
             .filter_by(cluster_id=cluster.id)
             .count()
         )

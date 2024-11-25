@@ -16,7 +16,7 @@ from wtforms_alchemy import model_form_factory
 
 from src import db
 from src.core.utils.text import text_to_list
-from src.models import Check, Cluster, Dataframe
+from src.models import Check, Cluster, Resource
 
 BaseModelForm = model_form_factory(FlaskForm)
 
@@ -29,7 +29,7 @@ class ModelForm(BaseModelForm):
 
 class DataFrameForm(ModelForm):
     class Meta:
-        model = Dataframe
+        model = Resource
 
     urls = TextAreaField("Ссылки")
     submit = SubmitField("Сохранить")
