@@ -1,0 +1,52 @@
+{% extends 'core/base.html' %}
+{% import 'bootstrap/wtf.html' as wtf %}
+{% from "bootstrap/pagination.html" import render_pagination %}
+
+{% block app_content %}
+    {% if title %}
+        <h1>{{ title }}</h1>
+    {% endif %}
+
+    <h2>
+        Датафреймы
+    </h2>
+    <p>
+        <a href="{{ url_for('core.dataframe_add') }}">Добавить датафрейм</a>
+    </p>
+    <table class="table table-hover">
+        <tr>
+            <th>Имя</th>
+            <th>Описание</th>
+            <th>Ссылки</th>
+        </tr>
+        {% for dataframe in dataframes.items %}
+        <tr>
+            <td><a href="{{ url_for('core.dataframe', pk=dataframe.id) }}">{{ dataframe.name }}</a></td>
+            <td>{% if dataframe.description  %}{{ dataframe.description }}{% endif %}</td>
+            <td>{{ dataframe.url_count }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {{ render_pagination(dataframes) }}
+
+    <h2>
+        Кластеры
+    </h2>
+    <p>
+        <a href="{{ url_for('core.cluster_add') }}">Добавить кластер</a>
+    </p>
+    <table class="table table-hover">
+        <tr>
+            <th>Имя</th>
+            <th>Описание</th>
+            <th>URL</th>
+        </tr>
+        {% for item in clusters %}
+        <tr>
+            <td><a href="{{ url_for('core.cluster', pk=item.id) }}">{{ item.name }}</a></td>
+            <td>{{ item.excerpt }}</td>
+            <td>{{ item.slug }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+{% endblock %}

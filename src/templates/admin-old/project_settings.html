@@ -1,0 +1,31 @@
+{% extends 'core/base.html' %}
+{% from 'bootstrap4/form.html' import render_field %}
+
+{% block app_content %}
+    {% if title %}
+        <h1>{{ title }}</h1>
+    {% endif %}
+
+    <form action="" method="post" class="form form-horizontal settings" role="form">
+        {{ form.csrf_token() }}
+        <table width="100%">
+            <tr>
+                <th></th>
+                <th>Название</th>
+                <th>Код</th>
+                <th>Удалить?</th>
+            </tr>
+        {% for form in form.properties %}
+            {{ wtf.form_errors(form) }}
+            <tr>
+                <td>{{ render_field(form.form.id) }}</td>
+                <td>{{ render_field(form.form.name) }}</td>
+                <td>{{ render_field(form.code) }}</td>
+                <td style="text-align: center;">{{ render_field(form.delete) }}</td>
+            </tr>
+        {% endfor %}
+        </table>
+        <br/>
+        {{ render_field(form.submit}}
+    </form>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends 'admin/master.html' %}
+{% from 'bootstrap4/form.html' import render_form %}
+
+{% block body %}
+    <h1>{{ title }}</h1>
+    <ul class="nav nav-tabs">
+      <li class="nav-item active">
+        <a class="nav-link active" aria-current="page" data-toggle="tab" href="#copypaste">Copy Paste</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-toggle="tab" href="#csv">CSV</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-toggle="tab" href="#sitemap">Sitemap</a>
+      </li>
+    </ul>
+    <div class="tab-content">
+      <div class="tab-pane active panel-body" id="copypaste">
+        {{ render_form(copy_paste_form) }}
+      </div>
+      <div class="tab-pane panel-body" id="csv" >{{ render_form(csv_form) }}</div>
+      <div class="tab-pane panel-body" id="sitemap" >Coming soon..</div>
+    </div>
+{% endblock %}

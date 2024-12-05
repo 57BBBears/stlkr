@@ -8,15 +8,13 @@ from wtforms import (
     SelectMultipleField,
     StringField,
     SubmitField,
-    TextAreaField,
     ValidationError,
     validators,
 )
 from wtforms_alchemy import model_form_factory
 
 from src import db
-from src.core.utils.text import text_to_list
-from src.models import Check, Cluster, Resource
+from src.models import Check, Cluster
 
 BaseModelForm = model_form_factory(FlaskForm)
 
@@ -25,23 +23,6 @@ class ModelForm(BaseModelForm):
     @classmethod
     def get_session(cls):
         return db.session
-
-
-class DataFrameForm(ModelForm):
-    class Meta:
-        model = Resource
-
-    urls = TextAreaField("Ссылки")
-    submit = SubmitField("Сохранить")
-
-    def validate_urls(self, field):
-        url_list = text_to_list(field.data)
-        not_urls = []
-        for url in url_list:
-            if not validators.url(url):
-                not_urls.append(url)
-        if not_urls:
-            raise ValidationError(f'Это не ссылки: {", ".join(not_urls)}')
 
 
 class EmptyForm(FlaskForm):

@@ -1,0 +1,8 @@
+{% macro import_urls(action, row_id, row) %}
+<form class="icon" method="POST" action="{{ get_url('.import_urls') }}">
+  <input type="hidden" name="row_id" value="{{ get_pk_value(row) }}" readonly=""/>
+  <button type="submit" title="{{ _gettext('Import urls') }}" name="import">
+    <span class="fa fa-glyphicon-cloud-download glyphicon glyphicon-cloud-download"></span>
+  </button>
+</form>
+{% endmacro %}

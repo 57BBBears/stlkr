@@ -28,6 +28,9 @@ def get_log_config(file):
 class Config:
     TESTING = False
     SECRET_KEY = getenv("SECRET_KEY")
+    RECAPTCHA_PUBLIC_KEY = getenv("RECAPTCHA_PUBLIC_KEY")
+    RECAPTCHA_PRIVATE_KEY = getenv("RECAPTCHA_PRIVATE_KEY")
+    FLASK_ADMIN_SWATCH = getenv("FLASK_ADMIN_SWATCH", "cerulean")
     # db
     SQLALCHEMY_DATABASE_URI = getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -47,6 +50,8 @@ class Config:
     QUEUES = getenv("QUEUES").split() if getenv("QUEUES") else ["default"]
     TASK_EXECUTION_TIME = int(getenv("TASK_EXECUTION_TIME") or 600)
     URLS_PER_EXTRACT = int(getenv("URLS_PER_EXTRACT") or 10)
+    # import
+    MAX_IMPORT_FILE_SIZE_KB = int(getenv("MAX_IMPORT_FILE_SIZE_KB") or 100)
     # other
     LOG_CONFIG = get_log_config(getenv("LOG_CONFIG"))
     # api
@@ -54,5 +59,5 @@ class Config:
 
 class TestingConfig(Config):
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = getenv("TEST_DATABASE_URI") or "sqlite:///:memory:"
+    SQLALCHEMY_DATABASE_URI = getenv("TEST_DATABASE_URI")
     QUEUES = "test"

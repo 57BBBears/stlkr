@@ -2,8 +2,9 @@ from logging.config import dictConfig
 
 # import rq
 from flask import Flask
-from flask_bootstrap import Bootstrap
+from flask_bootstrap import Bootstrap4
 from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect
 
 # from redis import Redis
 from src.models import db
@@ -20,7 +21,8 @@ def create_app(config: str = "config.Config"):
         dictConfig(app.config["LOG_CONFIG"])
 
     admin.admin.init_app(app)
-    Bootstrap(app)
+    Bootstrap4(app)
+    CSRFProtect(app)
     db.init_app(app)
     login_manager.init_app(app)
     mail.init_app(app)

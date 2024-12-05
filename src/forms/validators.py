@@ -26,3 +26,14 @@ def email_not_registered(message: str | None = None):
             raise ValidationError(message)
 
     return wrapper
+
+
+def max_file_size(max_size_kb):
+    max_bytes = max_size_kb * 1024
+
+    def file_length_check(form, field):
+        if len(field.data.read()) > max_bytes:
+            raise ValidationError(f"File size must be less than {max_size_kb} Kb")
+        field.data.seek(0)
+
+    return file_length_check

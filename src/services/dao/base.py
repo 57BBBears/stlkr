@@ -1,6 +1,6 @@
 from typing import Generic, Sequence, TypeVar
 
-from sqlalchemy import exc, insert, select, update
+from sqlalchemy import delete, exc, insert, select, update
 from sqlalchemy.orm import Session
 
 from src.models import Base
@@ -19,12 +19,12 @@ class BaseDAO(Generic[Model]):
         self.model = model
         self.session = session
 
-    def add(self, model: Model) -> int:
+    def add(self, model: Model) -> Model:
         try:
             self.session.add(model)
             self.session.flush([model])
 
-            return model.id
+            return model
 
         except exc.IntegrityError as e:
             raise IntegrityError() from e
@@ -35,12 +35,20 @@ class BaseDAO(Generic[Model]):
         except exc.IntegrityError as e:
             raise IntegrityError() from e
 
-    def insert(self, inserts: list[dict]):
+    def insert(self, inserts: list[dict]) -> Sequence[int]:
         try:
-            stmt = insert(self.model)
-            self.session.execute(stmt, inserts)
+            stmt = insert(self.model).returning(self.model.id)
+            result = self.session.scalars(stmt, inserts)
+
+            return result.all()
         except exc.IntegrityError as e:
             raise IntegrityError() from e
+
+    def bulk_delete(self, ids: list[int]):
+        if ids:
+            stmt = delete(self.model).where(self.model.id.in_(ids))
+
+            self.session.execute(stmt)
 
     def expunge(self, model: Model):
         self.session.expunge(model)
@@ -59,7 +67,7 @@ class BaseDAO(Generic[Model]):
         :param model_id: input id
         :return:
         """
-        result = self.session.execute(
+        result = self.session.scalars(
             select(self.model).where(self.model.id == model_id)
         )
 

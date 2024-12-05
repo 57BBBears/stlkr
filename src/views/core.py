@@ -10,29 +10,47 @@ from flask_login import login_user, logout_user
 from werkzeug.routing import BuildError
 from werkzeug.wrappers.response import Response
 
-from src.forms.auth import ChangePasswordForm, LoginForm, ResetPasswordForm
+from src.forms.core import (
+    ChangePasswordForm,
+    LoginForm,
+    RegisterForm,
+    ResetPasswordForm,
+)
 from src.services.core.base import get_user
 from src.services.core.change_password import change_user_password, get_email_by_token
+from src.services.core.register import register_user
 from src.services.core.reset_password import send_reset_password_link
 
 bp = Blueprint("core", __name__)
 
 
 @bp.route("/", methods=["GET", "POST"])
-def index():
+def index_view():
     form = LoginForm()
 
     if form.validate_on_submit():
         if (user := get_user(form.login.data)) and user.is_correct_password(
             form.password.data
         ):
-            login_user(user, remember=form.remember_me.data)
-
-            return _get_redirect("core.index")
+            if login_user(user, remember=form.remember_me.data):
+                return _get_redirect("projects.index_view")
 
         flash("Неверный email или пароль.", "danger")
 
     return render_template("core/index.html", form=form, title="[stlkr]")
+
+
+@bp.route("/register/", methods=["GET", "POST"])
+def register_view():
+    form = RegisterForm()
+
+    if form.validate_on_submit():
+        register_user(form.name.data, form.email.data, form.password.data)
+        flash("Вы успешно зарегистрированы.", "success")
+
+        return redirect(url_for("projects.index_view"))
+
+    return render_template("core/index.html", form=form, title="Регистрация")
 
 
 def _get_redirect(endpoint: str) -> Response:
@@ -45,7 +63,7 @@ def _get_redirect(endpoint: str) -> Response:
 
 
 @bp.route("/reset-password/", methods=["GET", "POST"])
-def reset_password():
+def reset_password_view():
     title = "Сброс пароля"
     form = ResetPasswordForm()
 
@@ -60,7 +78,7 @@ def reset_password():
 
 
 @bp.route("/reset-password/<token>/", methods=["GET", "POST"])
-def change_password(token: str):
+def change_password_view(token: str):
     email = get_email_by_token(token)
 
     form = ChangePasswordForm()
@@ -81,7 +99,7 @@ def change_password(token: str):
 
 
 @bp.route("/logout/")
-def logout():
+def logout_view():
     logout_user()
 
     return redirect(url_for("core.index"))

@@ -1,12 +1,10 @@
 import datetime
 from typing import Any, Optional
 
-import validators
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from furl import furl
 from sqlalchemy import (
-    JSON,
     ForeignKey,
     MetaData,
     String,
@@ -14,19 +12,21 @@ from sqlalchemy import (
     event,
     false,
     func,
-    select,
 )
 from sqlalchemy.orm import (
     Mapped,
-    column_property,
     declarative_base,
     mapped_column,
     relationship,
-    validates,
 )
 from sqlalchemy.sql import true
-from sqlalchemy_utils import EmailType, URLType
-from werkzeug.security import check_password_hash, generate_password_hash
+from sqlalchemy_utils import (
+    EmailType,
+    JSONType,
+    PasswordType,
+    URLType,
+    force_auto_coercion,
+)
 
 POSTGRES_INDEXES_NAMING_CONVENTION = {
     "ix": "%(column_0_label)s_idx",
@@ -45,6 +45,8 @@ Base = declarative_base(cls=Base, metadata=metadata)
 
 db = SQLAlchemy(model_class=Base)
 
+force_auto_coercion()
+
 
 class User(UserMixin, db.Model):
     __tablename__ = "users"
@@ -52,7 +54,11 @@ class User(UserMixin, db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255))
     email: Mapped[str] = mapped_column(EmailType, unique=True)
-    password: Mapped[str] = mapped_column(String(255))
+    password: Mapped[str] = mapped_column(
+        PasswordType(
+            max_length=255, schemes=["scrypt", "md5_crypt"], deprecated=["md5_crypt"]
+        )
+    )
     is_verified: Mapped[bool] = mapped_column(server_default=false())
 
     projects: Mapped[list["Project"]] = relationship(
@@ -60,23 +66,12 @@ class User(UserMixin, db.Model):
     )
 
     def is_correct_password(self, plaintext: str):
-        return check_password_hash(self.password, plaintext)
-
-    def is_active(self):
-        return True
-
-    @property
-    def is_authenticated(self):
-        return self.is_active
-
-    @property
-    def is_anonymous(self):
-        return False
+        return self.password == plaintext
 
 
-@event.listens_for(User.password, "set", retval=True)
-def hash_password(target, value, oldvalue, initiator):
-    return generate_password_hash(value)
+# @event.listens_for(User.password, "set", retval=True)
+# def hash_password(target, value, oldvalue, initiator):
+#     return generate_password_hash(value)
 
 
 class Project(db.Model):
@@ -109,16 +104,14 @@ class Resource(db.Model):
         back_populates="resource", passive_deletes=True
     )
     selectors: Mapped[list["ResourceExtract"]] = relationship(
-        back_populates="resources", passive_deletes=True
+        back_populates="resource", passive_deletes=True
     )
 
-    @column_property
-    def url_count(self):
-        return (
-            select(func.count(Url.id))
-            .where(Url.resource_id == self.id)
-            .scalar_subquery()
-        )
+    # @column_property
+    # def url_count(self):
+    #     return (
+    #         select(func.count(Url.id)).where(self.id == Url.resource_id)
+    #     )
 
     def __repr__(self):
         return self.name
@@ -139,19 +132,21 @@ class Url(db.Model):
     )
     published_at: Mapped[datetime.datetime | None]
 
-    UniqueConstraint(resource_id, address, name="urls_resource_id_address_key")
+    resource_id_address_key = UniqueConstraint(
+        resource_id, address, name="urls_resource_id_address_key"
+    )
 
     resource: Mapped[Resource] = relationship(back_populates="urls")
     pages: Mapped[list["Page"]] = relationship(
         secondary="pages_urls", back_populates="urls"
     )
 
-    @validates("address")
-    def validate_url(self, key, url):
-        if not validators.url(url):
-            raise ValueError(f"{url} is not url.")
-
-        return url
+    # @validates("address")
+    # def validate_url(self, key, url):
+    #     if not validators.url(url):
+    #         raise ValueError(f"{url} is not url.")
+    #
+    #     return url
 
 
 class Extract(db.Model):
@@ -234,15 +229,17 @@ class Site(db.Model):
     )
     name: Mapped[str] = mapped_column(String(255))
     domain: Mapped[str] = mapped_column(unique=True)
-    options: Mapped[dict[str, Any]] = mapped_column(type_=JSON, server_default="{}")
+    options: Mapped[dict[str, Any]] = mapped_column(JSONType(), server_default="{}")
     index_page_id: Mapped[int | None] = mapped_column(
         ForeignKey("pages.id", ondelete="SET NULL")
     )
 
     pages: Mapped[list["Page"]] = relationship(
-        back_populates="site", passive_deletes=True
+        back_populates="site", foreign_keys="Page.site_id", passive_deletes=True
     )
-    index_page: Mapped["Page"] = relationship(back_populates="index_site")
+    index_page: Mapped["Page"] = relationship(
+        back_populates="index_site", foreign_keys=[index_page_id]
+    )
 
 
 class Page(db.Model):
@@ -271,7 +268,7 @@ class Page(db.Model):
     UniqueConstraint(site_id, name, name="sections_site_id_name_key")
     UniqueConstraint(site_id, slug, name="sections_site_id_slug_key")
 
-    site: Mapped[Site] = relationship(back_populates="pages")
+    site: Mapped[Site] = relationship(back_populates="pages", foreign_keys=[site_id])
     parent: Mapped[Optional["Page"]] = relationship(
         back_populates="children", remote_side=[id], passive_deletes=True
     )
@@ -286,7 +283,7 @@ class Page(db.Model):
     )
     index_site: Mapped[Site | None] = relationship(
         back_populates="index_page",
-        remote_side=Site.index_page_id,
+        foreign_keys=[Site.index_page_id],
         passive_deletes=True,
     )
 
