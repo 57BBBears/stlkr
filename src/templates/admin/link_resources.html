@@ -1,0 +1,9 @@
+{% extends 'admin/master.html' %}
+{% from 'bootstrap4/form.html' import render_form %}
+
+{% block body %}
+    <h1>{{ title }}</h1>
+    <div class="tab-content">
+        {{ render_form(form) }}
+    </div>
+{% endblock %}

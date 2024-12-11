@@ -1,10 +1,11 @@
 import datetime
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from furl import furl
 from sqlalchemy import (
+    DateTime,
     ForeignKey,
     MetaData,
     String,
@@ -47,6 +48,11 @@ db = SQLAlchemy(model_class=Base)
 
 force_auto_coercion()
 
+timestamp = Annotated[
+    datetime.datetime,
+    mapped_column(DateTime(timezone=True), server_default=func.current_timestamp()),
+]
+
 
 class User(UserMixin, db.Model):
     __tablename__ = "users"
@@ -88,6 +94,12 @@ class Project(db.Model):
     extracts: Mapped[list["Extract"]] = relationship(
         back_populates="project", passive_deletes=True
     )
+    sites: Mapped[list["Site"]] = relationship(
+        back_populates="project", passive_deletes=True
+    )
+
+    def __str__(self):
+        return self.name
 
 
 class Resource(db.Model):
@@ -113,7 +125,7 @@ class Resource(db.Model):
     #         select(func.count(Url.id)).where(self.id == Url.resource_id)
     #     )
 
-    def __repr__(self):
+    def __str__(self):
         return self.name
 
 
@@ -127,9 +139,7 @@ class Url(db.Model):
         ForeignKey(Resource.id, ondelete="cascade")
     )
     address: Mapped[furl] = mapped_column(URLType())
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        server_default=func.current_timestamp()
-    )
+    created_at: Mapped[timestamp]
     published_at: Mapped[datetime.datetime | None]
 
     resource_id_address_key = UniqueConstraint(
@@ -138,8 +148,14 @@ class Url(db.Model):
 
     resource: Mapped[Resource] = relationship(back_populates="urls")
     pages: Mapped[list["Page"]] = relationship(
-        secondary="pages_urls", back_populates="urls"
+        back_populates="urls", secondary="pages_urls", passive_deletes=True
     )
+    url_pages: Mapped[list["PageUrl"]] = relationship(
+        back_populates="url", viewonly=True
+    )
+
+    def __str__(self):
+        return str(self.address)
 
     # @validates("address")
     # def validate_url(self, key, url):
@@ -157,17 +173,23 @@ class Extract(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey(Project.id, ondelete="cascade"))
     name: Mapped[str] = mapped_column(String(255))
-    code: Mapped[str] = mapped_column(String(255))
-
-    UniqueConstraint(project_id, code, name="extracts_project_id_code_key")
 
     project: Mapped[Project] = relationship(back_populates="extracts")
+    sites: Mapped[list["Site"]] = relationship(
+        back_populates="extracts", secondary="sites_extracts", passive_deletes=True
+    )
+    pages: Mapped[list["Page"]] = relationship(
+        back_populates="extracts", secondary="pages_extracts", passive_deletes=True
+    )
     selectors: Mapped[list["ResourceExtract"]] = relationship(
         back_populates="extract", passive_deletes=True
     )
-    pages: Mapped[list["Page"]] = relationship(
-        secondary="pages_extracts", back_populates="extracts"
+    site_extracts: Mapped[list["SiteExtract"]] = relationship(
+        back_populates="extract", viewonly=True
     )
+
+    def __repr__(self):
+        return self.name
 
 
 class ResourceExtract(db.Model):
@@ -224,9 +246,7 @@ class Site(db.Model):
     __tablename__ = "sites"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    project_id: Mapped[int | None] = mapped_column(
-        ForeignKey(Project.id, ondelete="cascade")
-    )
+    project_id: Mapped[int] = mapped_column(ForeignKey(Project.id, ondelete="cascade"))
     name: Mapped[str] = mapped_column(String(255))
     domain: Mapped[str] = mapped_column(unique=True)
     options: Mapped[dict[str, Any]] = mapped_column(JSONType(), server_default="{}")
@@ -234,11 +254,40 @@ class Site(db.Model):
         ForeignKey("pages.id", ondelete="SET NULL")
     )
 
+    project: Mapped[Project] = relationship(back_populates="sites")
     pages: Mapped[list["Page"]] = relationship(
         back_populates="site", foreign_keys="Page.site_id", passive_deletes=True
     )
     index_page: Mapped["Page"] = relationship(
         back_populates="index_site", foreign_keys=[index_page_id]
+    )
+    extracts: Mapped[list[Extract]] = relationship(
+        back_populates="sites", secondary="sites_extracts", passive_deletes=True
+    )
+    site_extracts: Mapped[list["SiteExtract"]] = relationship(
+        back_populates="site", viewonly=True
+    )
+
+    def __str__(self):
+        return self.name
+
+
+class SiteExtract(db.Model):
+    """Many to many table. Set code for extracts."""
+
+    __tablename__ = "sites_extracts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey(Site.id, ondelete="cascade"))
+    extract_id: Mapped[int] = mapped_column(ForeignKey(Extract.id, ondelete="cascade"))
+    code: Mapped[str] = mapped_column(String(255))
+    is_preview: Mapped[bool] = mapped_column(server_default=true())
+
+    UniqueConstraint(site_id, extract_id, name="sites_extracts_site_id_extract_id_key")
+
+    site: Mapped[Site] = relationship(back_populates="site_extracts", viewonly=True)
+    extract: Mapped[Extract] = relationship(
+        back_populates="site_extracts", viewonly=True
     )
 
 
@@ -247,7 +296,7 @@ class Page(db.Model):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     site_id: Mapped[int] = mapped_column(ForeignKey(Site.id, ondelete="cascade"))
-    parent_id: Mapped[int] = mapped_column(ForeignKey(id, ondelete="cascade"))
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey(id, ondelete="cascade"))
     name: Mapped[str] = mapped_column(String(255))
     slug: Mapped[str] = mapped_column(String(255))
     title: Mapped[str] = mapped_column(String(255), server_default="")
@@ -258,17 +307,22 @@ class Page(db.Model):
     content: Mapped[str] = mapped_column(server_default="")
     image: Mapped[str] = mapped_column(String(255), server_default="")
     template: Mapped[str] = mapped_column(String(255), server_default="")
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        server_default=func.current_timestamp()
-    )
+    created_at: Mapped[timestamp]
     updated_at: Mapped[datetime.datetime] = mapped_column(
-        onupdate=func.current_timestamp()
+        DateTime(timezone=True),
+        server_default=func.current_timestamp(),
+        server_onupdate=func.current_timestamp(),
     )
 
     UniqueConstraint(site_id, name, name="sections_site_id_name_key")
     UniqueConstraint(site_id, slug, name="sections_site_id_slug_key")
 
     site: Mapped[Site] = relationship(back_populates="pages", foreign_keys=[site_id])
+    index_site: Mapped[Site | None] = relationship(
+        back_populates="index_page",
+        foreign_keys=[Site.index_page_id],
+        passive_deletes=True,
+    )
     parent: Mapped[Optional["Page"]] = relationship(
         back_populates="children", remote_side=[id], passive_deletes=True
     )
@@ -276,16 +330,17 @@ class Page(db.Model):
         back_populates="parent", remote_side=[parent_id]
     )
     extracts: Mapped[list[Extract]] = relationship(
-        secondary="pages_extracts", back_populates="pages"
+        back_populates="pages", secondary="pages_extracts"
     )
     urls: Mapped[list[Url]] = relationship(
-        secondary="pages_urls", back_populates="pages"
+        back_populates="pages", secondary="pages_urls", passive_deletes=True
     )
-    index_site: Mapped[Site | None] = relationship(
-        back_populates="index_page",
-        foreign_keys=[Site.index_page_id],
-        passive_deletes=True,
+    page_urls: Mapped[list["PageUrl"]] = relationship(
+        back_populates="page", viewonly=True
     )
+
+    def __str__(self):
+        return self.name
 
 
 class PageExtract(db.Model):
@@ -296,7 +351,6 @@ class PageExtract(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     page_id: Mapped[int] = mapped_column(ForeignKey(Page.id, ondelete="cascade"))
     extract_id: Mapped[int] = mapped_column(ForeignKey(Extract.id, ondelete="cascade"))
-    is_on_page: Mapped[bool] = mapped_column(server_default=true())
 
     UniqueConstraint(page_id, extract_id, name="pages_extracts_page_id_extract_id_key")
 
@@ -309,8 +363,9 @@ class PageUrl(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     page_id: Mapped[int] = mapped_column(ForeignKey(Page.id, ondelete="cascade"))
     url_id: Mapped[int] = mapped_column(ForeignKey(Url.id, ondelete="cascade"))
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        server_default=func.current_timestamp()
-    )
+    created_at: Mapped[timestamp]
 
     UniqueConstraint(page_id, url_id, name="pages_urls_page_id_url_id_key")
+
+    page: Mapped[Page] = relationship(back_populates="page_urls", viewonly=True)
+    url: Mapped[Url] = relationship(back_populates="url_pages", viewonly=True)

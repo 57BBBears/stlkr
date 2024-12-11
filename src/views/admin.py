@@ -6,21 +6,38 @@ from flask_admin.contrib.sqla import ModelView
 from flask_admin.menu import MenuLink
 from flask_admin.model.template import EndpointLinkRowAction
 from flask_login import current_user
-from sqlalchemy import func
+from sqlalchemy import func, select
 from wtforms import HiddenField
 
+from src.forms.page import LinkResourcesForm
 from src.forms.resource import CopyPasteImportForm, CSVImportForm
-from src.models import Extract, Project, Resource, Url, db
+from src.models import (
+    Extract,
+    Page,
+    PageUrl,
+    Project,
+    Resource,
+    ResourceExtract,
+    Site,
+    SiteExtract,
+    Url,
+    db,
+)
 from src.services.admin.resource_view import (
     get_urls_from_csv,
     get_urls_from_text,
     open_temp_file,
     save_urls,
 )
-from src.services.dao.resource import ResourceDAO
 from src.services.dao.url import UrlDAO
-from src.views.formatters import detail_url_formatter
-from src.views.mixins import LoginRequiredMixin, ProjectAccessibleMixin
+from src.views.formatters import detail_url_formatter, page_urls_formatter
+from src.views.mixins import (
+    LoginRequiredMixin,
+    PageAccessibleMixin,
+    ProjectAccessibleMixin,
+    ResourceAccessibleMixin,
+    SiteAccessibleMixin,
+)
 
 
 class AdminView(LoginRequiredMixin, AdminIndexView):
@@ -72,20 +89,17 @@ class ProjectView(LoginRequiredMixin, ModelView):
 
 
 class ExtractView(LoginRequiredMixin, ProjectAccessibleMixin, ModelView):
-    column_filters = ("name", "code")
-    column_list = ["name", "code"]
-    form_columns = ("project_id", "name", "code")
+    column_filters = ("name",)
+    column_list = ["name"]
+    form_columns = ("project_id", "name")
     form_extra_fields = {
         "project_id": HiddenField("", render_kw={"readonly": True}),
     }
     list_template = "admin/custom_list.html"
 
-    def is_visible(self):
-        return False
-
     def create_form(self, obj=None):
         form = super().create_form(obj)
-        form.project_id.data = current_user.id
+        form.project_id.data = session.get("project", None)
 
         return form
 
@@ -103,7 +117,13 @@ class ResourceView(LoginRequiredMixin, ProjectAccessibleMixin, ModelView):
     column_extra_row_actions = [
         EndpointLinkRowAction(
             "glyphicon glyphicon-cloud-download", ".import_urls_view", "Import urls"
-        )
+        ),
+        EndpointLinkRowAction(
+            "glyphicon glyphicon-cog",
+            "resource-extracts.index_view",
+            "Extract settings",
+            id_arg="resource",
+        ),
     ]
     column_formatters = {"name": detail_url_formatter("urls.index_view", "resource")}
     list_template = "admin/custom_list.html"
@@ -113,9 +133,6 @@ class ResourceView(LoginRequiredMixin, ProjectAccessibleMixin, ModelView):
         form.project_id.data = session.get("project", None)
 
         return form
-
-    def is_visible(self):
-        return False
 
     @expose("/import/", methods=("GET", "POST"))
     def import_urls_view(self):
@@ -137,14 +154,14 @@ class ResourceView(LoginRequiredMixin, ProjectAccessibleMixin, ModelView):
                 file_path = os.path.join(
                     current_app.instance_path,
                     "import",
-                    f"{current_user.id}_{self.resource_id}.csv",
+                    f"{current_user.id}_{self._get_arg_id()}.csv",
                 )
                 with open_temp_file(file_path, csv_form.file.data) as file:
                     urls, not_urls = get_urls_from_csv(
                         file,
                         csv_form.delimiter.data if csv_form.delimiter.data else ",",
                     )
-                print(urls, not_urls)
+
                 return self._save_urls(urls, not_urls)
 
             return self.render(
@@ -158,7 +175,7 @@ class ResourceView(LoginRequiredMixin, ProjectAccessibleMixin, ModelView):
 
     def _save_urls(self, urls: set[str], not_urls: list[str]):
         dao = UrlDAO(self.session)
-        inserted_url = save_urls(urls, self.resource_id, dao)
+        inserted_url = save_urls(urls, self._get_model_id(), dao)
         dao.commit()
         flash(
             f"Всего: {len(urls) + len(not_urls)} "
@@ -174,14 +191,29 @@ class ResourceView(LoginRequiredMixin, ProjectAccessibleMixin, ModelView):
         return redirect(url_for(request.endpoint, **request.args))
 
     def _is_resource_accessible(self):
-        resource_id = request.args.get("id", -1, type=int)
-        dao = ResourceDAO(self.session)
+        resource_id = str(self._get_model_id())
         return (
-            resource := dao.get(resource_id)
+            resource := self.get_one(resource_id)
         ) and resource.project.user_id == current_user.id
 
+    @staticmethod
+    def _get_model_id() -> int:
+        return request.args.get("id", -1, type=int)
 
-class UrlView(LoginRequiredMixin, ModelView):
+
+class ResourceExtractView(LoginRequiredMixin, ResourceAccessibleMixin, ModelView):
+    column_list = ["resource", "extract", "selector"]
+    form_columns = ("resource_id", "extract", "selector")
+    list_template = "admin/custom_list.html"
+    form_extra_fields = {"resource_id": HiddenField("", render_kw={"readonly": True})}
+
+    def create_form(self, obj=None):
+        form = super().create_form(obj)
+        form.resource_id.data = session.get("resource")
+        return form
+
+
+class UrlView(LoginRequiredMixin, ResourceAccessibleMixin, ModelView):
     column_filters = ("address",)
     column_list = ["address", "created_at", "published_at"]
     form_columns = (
@@ -195,35 +227,152 @@ class UrlView(LoginRequiredMixin, ModelView):
 
     def create_form(self, obj=None):
         form = super().create_form(obj)
-        form.resource_id.data = session.get("resource", None)
+        form.resource_id.data = session.get("resource")
 
         return form
 
-    def is_visible(self):
-        return False
 
-    @expose("/")
-    def index_view(self):
-        if self._is_resource_accessible():
-            session["resource"] = request.args["resource"]
-            return super().index_view()
-
-        return redirect(url_for("resources.index_view"))
+class SiteView(LoginRequiredMixin, ModelView):
+    column_filters = ("project", "name", "domain")
+    column_list = ["project", "name", "domain"]
+    form_columns = ("project", "name", "domain")
+    form_args = {"project": {"query_factory": lambda: reversed(current_user.projects)}}
+    # inline_models = [(Project, dict(form_columns=['name']))]
+    # form_extra_fields = {
+    #     "project": QuerySelectField(
+    #         query_factory=lambda: reversed(current_user.projects),
+    #         validators=[input_required()],
+    #     )
+    # }
+    column_formatters = {"name": detail_url_formatter("pages.index_view", "site")}
+    list_template = "admin/custom_list.html"
+    column_extra_row_actions = [
+        EndpointLinkRowAction(
+            "glyphicon glyphicon-cog",
+            "site-extracts.index_view",
+            "Extract settings",
+            "site",
+        )
+    ]
 
     def get_query(self):
-        return self.session.query(self.model).where(
-            self.model.resource_id == request.args.get("resource", -1)
+        return (
+            super().get_query().join(Project).where(Project.user_id == current_user.id)
         )
 
     def get_count_query(self):
         return self.session.query(func.count("*")).select_from(self.get_query())
 
-    def _is_resource_accessible(self):
-        resource_id = request.args.get("resource") or -1
-        dao = ResourceDAO(self.session)
+
+class SiteExtractView(LoginRequiredMixin, SiteAccessibleMixin, ModelView):
+    column_list = ["site", "extract", "code", "is_preview"]
+    form_columns = ("site_id", "extract", "code", "is_preview")
+    list_template = "admin/custom_list.html"
+    form_extra_fields = {"site_id": HiddenField("", render_kw={"readonly": True})}
+
+    @property
+    def form_args(self):
+        return {
+            "extract": {
+                "query_factory": lambda: Extract.query.filter(
+                    Extract.project_id
+                    == select(Site.project_id)
+                    .where(Site.id == session.get("site"))
+                    .scalar_subquery()
+                )
+            }
+        }
+
+    def create_form(self, obj=None):
+        form = super().create_form(obj)
+        form.site_id.data = session.get("site")
+        return form
+
+
+class PageView(LoginRequiredMixin, SiteAccessibleMixin, ModelView):
+    column_filters = ("site", "name", "slug")
+    column_list = ["site", "name", "slug"]
+    form_columns = (
+        "site_id",
+        "parent",
+        "name",
+        "slug",
+        "title",
+        "description",
+        "keywords",
+        "heading",
+        "excerpt",
+        "content",
+        "image",
+        "template",
+    )
+    column_formatters = {"name": page_urls_formatter("page-urls.index_view", "id")}
+    form_extra_fields = {
+        "site_id": HiddenField("", render_kw={"readonly": True}),
+    }
+    list_template = "admin/custom_list.html"
+    column_extra_row_actions = [
+        EndpointLinkRowAction(
+            "glyphicon glyphicon-link",
+            ".link_resources_view",
+            "Link resources to the page",
+        ),
+    ]
+
+    @property
+    def form_args(self):
+        return {
+            "parent": {
+                "query_factory": lambda: Page.query.filter(
+                    Page.site_id == session.get("site"),
+                    Page.id != request.args.get("id", -1, type=int),
+                )
+            }
+        }
+
+    def create_form(self, obj=None):
+        form = super().create_form(obj)
+        form.site_id.data = session.get("site")
+
+        return form
+
+    @expose("/link/", methods=("GET", "POST"))
+    def link_resources_view(self):
+        if self._is_page_accessible():
+            form = LinkResourcesForm()
+
+            if form.validate_on_submit():
+                page = self.get_one(self._get_model_id())
+                page.urls = [
+                    url for resource in form.resources.data for url in resource.urls
+                ]
+                self.session.commit()
+                flash("Resources has been successfully linked.", "success")
+
+                return redirect(url_for(".index_view", site=session.get("site")))
+
+            return self.render(
+                "admin/link_resources.html", title="Link resources", form=form
+            )
+
+        return redirect(url_for(".index_view", site=session.get("site")))
+
+    def _is_page_accessible(self):
+        page_id = self._get_model_id()
         return (
-            resource := dao.get(resource_id)
-        ) and resource.project.user_id == current_user.id
+            page := self.get_one(page_id)
+        ) and page.site.project.user_id == current_user.id
+
+    @staticmethod
+    def _get_model_id() -> str:
+        return request.args.get("id", "-1", type=str)
+
+
+class PageUrlView(LoginRequiredMixin, PageAccessibleMixin, ModelView):
+    can_create = False
+    can_edit = False
+    column_list = ["page", "url", "created_at"]
+    list_template = "admin/custom_list.html"
 
 
 admin = Admin(
@@ -235,7 +384,28 @@ admin.add_view(
         Extract, db.session, "Настройки извлекаемых данных", endpoint="extracts"
     )
 )
+admin.add_view(
+    ResourceExtractView(
+        ResourceExtract,
+        db.session,
+        "Настройки извлекаемых данных",
+        endpoint="resource-extracts",
+    )
+)
 admin.add_view(ResourceView(Resource, db.session, "Ресурсы", endpoint="resources"))
 admin.add_view(UrlView(Url, db.session, "Ссылки", endpoint="urls"))
+admin.add_view(SiteView(Site, db.session, "Сайты", endpoint="sites"))
+admin.add_view(
+    SiteExtractView(
+        SiteExtract,
+        db.session,
+        "Настройки извлекаемых данных",
+        endpoint="site-extracts",
+    )
+)
+admin.add_view(PageView(Page, db.session, "Страницы", endpoint="pages"))
+admin.add_view(
+    PageUrlView(PageUrl, db.session, "Привязанные ссылки", endpoint="page-urls")
+)
 
 admin.add_link(MenuLink(name="Выйти", endpoint="core.logout_view"))
