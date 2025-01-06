@@ -1,20 +1,18 @@
-import os
-
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy_utils import create_database, database_exists, drop_database
 
+from config import TestingConfig
 from src import create_app, db
 
-TESTING_CONFIG = "config.TestingConfig"
+TESTING_CONFIG = TestingConfig
 
 
 @pytest.fixture(scope="session")
 def app():
-    os.environ["CONFIG"] = TESTING_CONFIG
-    print("Using config " + TESTING_CONFIG)
+    print("Using config " + str(TESTING_CONFIG))
 
-    app = create_app()
+    app = create_app(TESTING_CONFIG)
 
     if not app.config["TESTING"]:
         raise ValueError("Not a testing config")

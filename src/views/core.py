@@ -1,15 +1,11 @@
-from flask import (
-    Blueprint,
-    flash,
-    redirect,
-    render_template,
-    request,
-    url_for,
-)
+from functools import partial
+
+from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import login_user, logout_user
 from werkzeug.routing import BuildError
 from werkzeug.wrappers.response import Response
 
+from config import Config
 from src.forms.core import (
     ChangePasswordForm,
     LoginForm,
@@ -22,9 +18,10 @@ from src.services.core.register import register_user
 from src.services.core.reset_password import send_reset_password_link
 
 bp = Blueprint("core", __name__)
+route = partial(bp.route, host=Config.CORE_DOMAIN)
 
 
-@bp.route("/", methods=["GET", "POST"])
+@route("/", methods=["GET", "POST"])
 def index_view():
     form = LoginForm()
 
@@ -40,7 +37,7 @@ def index_view():
     return render_template("core/index.html", form=form, title="[stlkr]")
 
 
-@bp.route("/register/", methods=["GET", "POST"])
+@route("/register/", methods=["GET", "POST"])
 def register_view():
     form = RegisterForm()
 
@@ -62,7 +59,7 @@ def _get_redirect(endpoint: str) -> Response:
         return redirect(url)
 
 
-@bp.route("/reset-password/", methods=["GET", "POST"])
+@route("/reset-password/", methods=["GET", "POST"])
 def reset_password_view():
     title = "Сброс пароля"
     form = ResetPasswordForm()
@@ -77,7 +74,7 @@ def reset_password_view():
     return render_template("public/reset_password.html", form=form, title=title)
 
 
-@bp.route("/reset-password/<token>/", methods=["GET", "POST"])
+@route("/reset-password/<token>/", methods=["GET", "POST"])
 def change_password_view(token: str):
     email = get_email_by_token(token)
 
@@ -98,7 +95,7 @@ def change_password_view(token: str):
     )
 
 
-@bp.route("/logout/")
+@route("/logout/")
 def logout_view():
     logout_user()
 

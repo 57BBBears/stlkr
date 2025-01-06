@@ -28,6 +28,7 @@ from sqlalchemy_utils import (
     URLType,
     force_auto_coercion,
 )
+from werkzeug.security import safe_join
 
 POSTGRES_INDEXES_NAMING_CONVENTION = {
     "ix": "%(column_0_label)s_idx",
@@ -153,6 +154,9 @@ class Url(db.Model):
     url_pages: Mapped[list["PageUrl"]] = relationship(
         back_populates="url", viewonly=True
     )
+    url_extracts: Mapped["UrlExtract"] = relationship(
+        back_populates="url", passive_deletes=True
+    )
 
     def __str__(self):
         return str(self.address)
@@ -187,8 +191,11 @@ class Extract(db.Model):
     site_extracts: Mapped[list["SiteExtract"]] = relationship(
         back_populates="extract", viewonly=True
     )
+    url_extracts: Mapped["UrlExtract"] = relationship(
+        back_populates="extract", passive_deletes=True
+    )
 
-    def __repr__(self):
+    def __str__(self):
         return self.name
 
 
@@ -229,6 +236,9 @@ class UrlExtract(db.Model):
 
     UniqueConstraint(url_id, extract_id, name="urls_extracts_url_id_extract_id_key")
 
+    url: Mapped[Url] = relationship(back_populates="url_extracts")
+    extract: Mapped[Extract] = relationship(back_populates="url_extracts")
+
     @staticmethod
     def set_data_modified(target, value, oldvalue, initiator):
         target.data_modified_at = datetime.datetime.now(datetime.UTC)
@@ -249,7 +259,9 @@ class Site(db.Model):
     project_id: Mapped[int] = mapped_column(ForeignKey(Project.id, ondelete="cascade"))
     name: Mapped[str] = mapped_column(String(255))
     domain: Mapped[str] = mapped_column(unique=True)
+    template: Mapped[str] = mapped_column(String(255), server_default="")
     options: Mapped[dict[str, Any]] = mapped_column(JSONType(), server_default="{}")
+
     index_page_id: Mapped[int | None] = mapped_column(
         ForeignKey("pages.id", ondelete="SET NULL")
     )
@@ -270,6 +282,9 @@ class Site(db.Model):
 
     def __str__(self):
         return self.name
+
+    def get_template_folder(self) -> str | None:
+        return safe_join(str(self.project.user_id), self.template)
 
 
 class SiteExtract(db.Model):
@@ -341,6 +356,22 @@ class Page(db.Model):
 
     def __str__(self):
         return self.name
+
+    def get_render_template(self) -> tuple[str, dir]:
+        return (
+            safe_join(self.site.get_template_folder(), self.template or "index.html"),
+            {
+                "title": self.title,
+                "description": self.description,
+                "keywords": self.keywords,
+                "heading": self.heading,
+                "excerpt": self.excerpt,
+                "content": self.content,
+                "image": self.image,
+                "created_at": self.created_at,
+                "updated_at": self.updated_at,
+            },
+        )
 
 
 class PageExtract(db.Model):

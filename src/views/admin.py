@@ -5,10 +5,12 @@ from flask_admin import Admin, AdminIndexView, expose
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.menu import MenuLink
 from flask_admin.model.template import EndpointLinkRowAction
+from flask_admin.theme import Bootstrap4Theme
 from flask_login import current_user
 from sqlalchemy import func, select
 from wtforms import HiddenField
 
+from config import Config
 from src.forms.page import LinkResourcesForm
 from src.forms.resource import CopyPasteImportForm, CSVImportForm
 from src.models import (
@@ -21,6 +23,7 @@ from src.models import (
     Site,
     SiteExtract,
     Url,
+    UrlExtract,
     db,
 )
 from src.services.admin.resource_view import (
@@ -37,6 +40,7 @@ from src.views.mixins import (
     ProjectAccessibleMixin,
     ResourceAccessibleMixin,
     SiteAccessibleMixin,
+    UrlAccessibleMixin,
 )
 
 
@@ -66,7 +70,7 @@ class ProjectView(LoginRequiredMixin, ModelView):
     list_template = "admin/custom_list.html"
     column_extra_row_actions = [
         EndpointLinkRowAction(
-            "glyphicon glyphicon-cog",
+            "fa fa-cog",
             "extracts.index_view",
             "Extract settings",
             "project",
@@ -116,10 +120,10 @@ class ResourceView(LoginRequiredMixin, ProjectAccessibleMixin, ModelView):
     }
     column_extra_row_actions = [
         EndpointLinkRowAction(
-            "glyphicon glyphicon-cloud-download", ".import_urls_view", "Import urls"
+            "fa fa-cloud-download", ".import_urls_view", "Import urls"
         ),
         EndpointLinkRowAction(
-            "glyphicon glyphicon-cog",
+            "fa fa-cog",
             "resource-extracts.index_view",
             "Extract settings",
             id_arg="resource",
@@ -216,10 +220,10 @@ class ResourceExtractView(LoginRequiredMixin, ResourceAccessibleMixin, ModelView
 class UrlView(LoginRequiredMixin, ResourceAccessibleMixin, ModelView):
     column_filters = ("address",)
     column_list = ["address", "created_at", "published_at"]
-    form_columns = (
-        "resource_id",
-        "address",
-    )
+    form_columns = ("resource_id", "address")
+    column_formatters = {
+        "address": detail_url_formatter("url-extracts.index_view", "url")
+    }
     form_extra_fields = {
         "resource_id": HiddenField("", render_kw={"readonly": True}),
     }
@@ -232,23 +236,64 @@ class UrlView(LoginRequiredMixin, ResourceAccessibleMixin, ModelView):
         return form
 
 
+class UrlExtractView(LoginRequiredMixin, UrlAccessibleMixin, ModelView):
+    column_list = [
+        "url",
+        "extract",
+        "draft",
+        "data",
+        "draft_modified_at",
+        "data_modified_at",
+    ]
+    form_columns = ("url_id", "extract", "draft", "data")
+    form_extra_fields = {
+        "url_id": HiddenField("", render_kw={"readonly": True}),
+    }
+    list_template = "admin/custom_list.html"
+
+    @property
+    def form_args(self):
+        return {
+            "extract": {
+                "query_factory": lambda: Extract.query.filter(
+                    Extract.project_id
+                    == select(Resource.project_id)
+                    .join(Url)
+                    .where(Url.id == session.get("url"))
+                    .scalar_subquery()
+                )
+            }
+        }
+
+    def create_form(self, obj=None):
+        form = super().create_form(obj)
+        form.url_id.data = session.get("url")
+
+        return form
+
+
 class SiteView(LoginRequiredMixin, ModelView):
     column_filters = ("project", "name", "domain")
     column_list = ["project", "name", "domain"]
-    form_columns = ("project", "name", "domain")
-    form_args = {"project": {"query_factory": lambda: reversed(current_user.projects)}}
+    form_columns = ("project", "name", "domain", "index_page", "template")
+
+    @property
+    def form_args(self):
+        return {
+            "project": {"query_factory": lambda: reversed(current_user.projects)},
+            "index_page": {
+                "query_factory": lambda: Page.query.filter(
+                    Page.site_id == request.args.get("id")
+                )
+            },
+        }
+
     # inline_models = [(Project, dict(form_columns=['name']))]
-    # form_extra_fields = {
-    #     "project": QuerySelectField(
-    #         query_factory=lambda: reversed(current_user.projects),
-    #         validators=[input_required()],
-    #     )
-    # }
     column_formatters = {"name": detail_url_formatter("pages.index_view", "site")}
     list_template = "admin/custom_list.html"
     column_extra_row_actions = [
         EndpointLinkRowAction(
-            "glyphicon glyphicon-cog",
+            "fa fa-cog",
             "site-extracts.index_view",
             "Extract settings",
             "site",
@@ -313,7 +358,7 @@ class PageView(LoginRequiredMixin, SiteAccessibleMixin, ModelView):
     list_template = "admin/custom_list.html"
     column_extra_row_actions = [
         EndpointLinkRowAction(
-            "glyphicon glyphicon-link",
+            "fa fa-link",
             ".link_resources_view",
             "Link resources to the page",
         ),
@@ -376,7 +421,11 @@ class PageUrlView(LoginRequiredMixin, PageAccessibleMixin, ModelView):
 
 
 admin = Admin(
-    name="[stlkr]", url="/my/", index_view=AdminView(), template_mode="bootstrap3"
+    name="[stlkr]",
+    url="/my/",
+    index_view=AdminView(),
+    theme=Bootstrap4Theme(swatch="cerulean"),
+    host=Config.CORE_DOMAIN,
 )
 admin.add_view(ProjectView(Project, db.session, "Проекты", endpoint="projects"))
 admin.add_view(
@@ -394,6 +443,11 @@ admin.add_view(
 )
 admin.add_view(ResourceView(Resource, db.session, "Ресурсы", endpoint="resources"))
 admin.add_view(UrlView(Url, db.session, "Ссылки", endpoint="urls"))
+admin.add_view(
+    UrlExtractView(
+        UrlExtract, db.session, "Извлечённые данные", endpoint="url-extracts"
+    )
+)
 admin.add_view(SiteView(Site, db.session, "Сайты", endpoint="sites"))
 admin.add_view(
     SiteExtractView(

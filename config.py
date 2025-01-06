@@ -31,6 +31,11 @@ class Config:
     RECAPTCHA_PUBLIC_KEY = getenv("RECAPTCHA_PUBLIC_KEY")
     RECAPTCHA_PRIVATE_KEY = getenv("RECAPTCHA_PRIVATE_KEY")
     FLASK_ADMIN_SWATCH = getenv("FLASK_ADMIN_SWATCH", "cerulean")
+    # core
+    CORE_DOMAIN = getenv("CORE_DOMAIN", "localhost:5000")
+    PUBLIC_TEMPLATE_FOLDER = os.path.abspath(
+        getenv("PUBLIC_TEMPLATE_FOLDER", "instance/templates")
+    )
     # db
     SQLALCHEMY_DATABASE_URI = getenv("SQLALCHEMY_DATABASE_URI")
     SQLALCHEMY_TRACK_MODIFICATIONS = False

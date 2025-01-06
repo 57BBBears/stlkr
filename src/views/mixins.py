@@ -10,6 +10,7 @@ from src.services.dao.page import PageDAO
 from src.services.dao.project import ProjectDAO
 from src.services.dao.resource import ResourceDAO
 from src.services.dao.site import SiteDAO
+from src.services.dao.url import UrlDAO
 
 
 class LoginRequiredMixin:
@@ -136,15 +137,29 @@ class PageAccessibleMixin(AccessibleMixinInterface):
 
     @staticmethod
     def _get_redirect_endpoint() -> str:
-        return "pages.index_view"
+        return "sites.index_view"
 
     def _is_model_accessible_by_user(self, page_id: int) -> bool:
         dao = PageDAO(self.session)
         return (
             page := dao.get(page_id)
         ) and page.site.project.user_id == current_user.id
-        # return ((page := self.get_one(str(page_id))) and
-        #         page.site.project.user_id == current_user.id)
 
     def _get_model_attr_name(self) -> str:
         return "page_id"
+
+
+class UrlAccessibleMixin(AccessibleMixinInterface):
+    @staticmethod
+    def _get_arg_name() -> str:
+        return "url"
+
+    @staticmethod
+    def _get_redirect_endpoint() -> str:
+        return "urls.index_view"
+
+    def _is_model_accessible_by_user(self, site_id: int) -> bool:
+        dao = UrlDAO(self.session)
+        return (
+            url := dao.get(site_id)
+        ) and url.resource.project.user_id == current_user.id

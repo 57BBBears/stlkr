@@ -7,15 +7,53 @@
 #     Url,
 #     UrlProperty,
 # )
+from functools import partial
 
-# bp = Blueprint("pages", __name__)
+from flask import Blueprint, abort, current_app, render_template, send_from_directory
+from werkzeug.security import safe_join
 
-#
-# @bp.route("/")
-# def index():
-#     return render_template("pages/index.html")
-#
-#
+from src.models import db
+from src.services.dao.page import PageDAO
+from src.services.dao.site import SiteDAO
+
+bp = Blueprint("public", __name__)
+route = partial(bp.route, host="<host>")
+
+
+@route("/")
+def index_view(host: str):
+    dao = SiteDAO(db.session)
+    if site := dao.get_by_domain(host):
+        template, context = site.index_page.get_render_template()
+        return render_template(template, **context)
+
+    abort(404)
+
+
+@route("/<path:filename>.<string:extension>")
+def static_view(host: str, filename: str, extension: str):
+    dao = SiteDAO(db.session)
+    if site := dao.get_by_domain(host):
+        return send_from_directory(
+            safe_join(
+                current_app.config["PUBLIC_TEMPLATE_FOLDER"], site.get_template_folder()
+            ),
+            f"{filename}.{extension}",
+        )
+
+    abort(404)
+
+
+@route("/<path:slug>/")
+def page_view(host: str, slug: str):
+    dao = PageDAO(db.session)
+    if page := dao.get_by_slug(host, slug):
+        template, context = page.get_render_template()
+        return render_template(template, **context)
+
+    abort(404)
+
+
 # @bp.route("/catalog/<slug>/")
 # def category(slug):
 #     cluster = Cluster.query.filter_by(slug=slug).first_or_404()

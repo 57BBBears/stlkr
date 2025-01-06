@@ -11,13 +11,14 @@
             {{ bootstrap.load_css() }}
         {% endblock %}
 
-        {% block title %}
+
         <title>
+        {% block title %}
             {% if title %}
                 {{ title }}
             {% endif %}
-        </title>
         {% endblock %}
+        </title>
 
         {% endblock %}
     </head>
