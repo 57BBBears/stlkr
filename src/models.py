@@ -13,14 +13,18 @@ from sqlalchemy import (
     event,
     false,
     func,
+    select,
 )
 from sqlalchemy.orm import (
     Mapped,
+    aliased,
+    column_property,
     declarative_base,
     mapped_column,
+    object_session,
     relationship,
 )
-from sqlalchemy.sql import true
+from sqlalchemy.sql import Select, exists, true
 from sqlalchemy_utils import (
     EmailType,
     JSONType,
@@ -29,6 +33,8 @@ from sqlalchemy_utils import (
     force_auto_coercion,
 )
 from werkzeug.security import safe_join
+
+from src.utils.pagination import paginate
 
 POSTGRES_INDEXES_NAMING_CONVENTION = {
     "ix": "%(column_0_label)s_idx",
@@ -154,12 +160,34 @@ class Url(db.Model):
     url_pages: Mapped[list["PageUrl"]] = relationship(
         back_populates="url", viewonly=True
     )
-    url_extracts: Mapped["UrlExtract"] = relationship(
+    url_extracts: Mapped[list["UrlExtract"]] = relationship(
         back_populates="url", passive_deletes=True
     )
 
     def __str__(self):
         return str(self.address)
+
+    def get_render_template(self) -> tuple[str, dir]:
+        extract_id_extract_code_map = {
+            site_ext.extract_id: site_ext.code
+            for site_ext in self.pages[0].site.site_extracts
+        }
+        context = {
+            "source": str(self.address),
+            "parent": self._get_parent_info(),
+            "info": {
+                extract_id_extract_code_map[url_extract.extract_id]: url_extract.data
+                for url_extract in self.url_extracts
+            },
+        }
+
+        return (self.pages[0]._get_detail_template(), context)
+
+    def _get_parent_info(self) -> dict:
+        return {
+            "name": self.pages[0].name,
+            "slug": self.pages[0].slug,
+        }
 
     # @validates("address")
     # def validate_url(self, key, url):
@@ -191,7 +219,7 @@ class Extract(db.Model):
     site_extracts: Mapped[list["SiteExtract"]] = relationship(
         back_populates="extract", viewonly=True
     )
-    url_extracts: Mapped["UrlExtract"] = relationship(
+    url_extracts: Mapped[list["UrlExtract"]] = relationship(
         back_populates="extract", passive_deletes=True
     )
 
@@ -306,6 +334,22 @@ class SiteExtract(db.Model):
     )
 
 
+class PageUrl(db.Model):
+    """Many to many table."""
+
+    __tablename__ = "pages_urls"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    page_id: Mapped[int] = mapped_column(ForeignKey("pages.id", ondelete="cascade"))
+    url_id: Mapped[int] = mapped_column(ForeignKey(Url.id, ondelete="cascade"))
+    created_at: Mapped[timestamp]
+
+    UniqueConstraint(page_id, url_id, name="pages_urls_page_id_url_id_key")
+
+    page: Mapped["Page"] = relationship(back_populates="page_urls", viewonly=True)
+    url: Mapped[Url] = relationship(back_populates="url_pages", viewonly=True)
+
+
 class Page(db.Model):
     __tablename__ = "pages"
 
@@ -322,11 +366,15 @@ class Page(db.Model):
     content: Mapped[str] = mapped_column(server_default="")
     image: Mapped[str] = mapped_column(String(255), server_default="")
     template: Mapped[str] = mapped_column(String(255), server_default="")
+    detail_template: Mapped[str] = mapped_column(String(255), server_default="")
     created_at: Mapped[timestamp]
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.current_timestamp(),
         server_onupdate=func.current_timestamp(),
+    )
+    is_section = column_property(
+        exists().where(PageUrl.page_id == id).correlate_except(PageUrl)
     )
 
     UniqueConstraint(site_id, name, name="sections_site_id_name_key")
@@ -358,19 +406,73 @@ class Page(db.Model):
         return self.name
 
     def get_render_template(self) -> tuple[str, dir]:
-        return (
-            safe_join(self.site.get_template_folder(), self.template or "index.html"),
-            {
-                "title": self.title,
-                "description": self.description,
-                "keywords": self.keywords,
-                "heading": self.heading,
-                "excerpt": self.excerpt,
-                "content": self.content,
-                "image": self.image,
-                "created_at": self.created_at,
-                "updated_at": self.updated_at,
-            },
+        context = {
+            "title": self.title,
+            "description": self.description,
+            "keywords": self.keywords,
+            "heading": self.heading,
+            "excerpt": self.excerpt,
+            "content": self.content,
+            "image": self.image,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+        if self.is_section:
+            site_extracts = [ext for ext in self.site.site_extracts if ext.is_preview]
+            query = self._get_url_extracts_query(site_extracts)
+            rows = paginate(object_session(self), query)
+
+            context["total"] = rows.total
+            context["pagination"] = (
+                {
+                    "page": rows.page,
+                    "pages": list(
+                        rows.iter_pages(
+                            left_edge=0, left_current=0, right_current=0, right_edge=0
+                        )
+                    ),
+                },
+            )
+            context["items"] = [
+                {
+                    "source": str(row[0].address),
+                    "info": [
+                        {query.column_descriptions[i]["name"]: row[i].data}
+                        for i in range(1, len(site_extracts) + 1)
+                    ],
+                }
+                for row in rows
+            ]
+
+        return (self._get_page_template(), context)
+
+    def _get_url_extracts_query(self, site_extracts: list[SiteExtract]) -> Select:
+        # set alias with extract code as a column name
+        extract_aliases = [aliased(UrlExtract, name=ext.code) for ext in site_extracts]
+        # join extracts to page urls one by one as a column
+        query = select(Url, *extract_aliases)
+        for i in range(len(site_extracts)):
+            alias = extract_aliases[i]
+            query = query.join(alias, alias.url_id == Url.id).where(
+                alias.extract_id == site_extracts[i].extract_id
+            )
+
+        return query.join(PageUrl).where(PageUrl.page_id == self.id)
+
+    def _get_page_template(self) -> str:
+        return safe_join(
+            self.site.get_template_folder(),
+            self.template or "index.html"
+            if self.site.index_page_id == self.id
+            else "section.html"
+            if self.is_section
+            else "page.html",
+        )
+
+    def _get_detail_template(self) -> str:
+        return safe_join(
+            self.site.get_template_folder(), self.detail_template or "detail.html"
         )
 
 
@@ -384,19 +486,3 @@ class PageExtract(db.Model):
     extract_id: Mapped[int] = mapped_column(ForeignKey(Extract.id, ondelete="cascade"))
 
     UniqueConstraint(page_id, extract_id, name="pages_extracts_page_id_extract_id_key")
-
-
-class PageUrl(db.Model):
-    """Many to many table."""
-
-    __tablename__ = "pages_urls"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    page_id: Mapped[int] = mapped_column(ForeignKey(Page.id, ondelete="cascade"))
-    url_id: Mapped[int] = mapped_column(ForeignKey(Url.id, ondelete="cascade"))
-    created_at: Mapped[timestamp]
-
-    UniqueConstraint(page_id, url_id, name="pages_urls_page_id_url_id_key")
-
-    page: Mapped[Page] = relationship(back_populates="page_urls", viewonly=True)
-    url: Mapped[Url] = relationship(back_populates="url_pages", viewonly=True)

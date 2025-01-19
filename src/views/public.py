@@ -15,6 +15,7 @@ from werkzeug.security import safe_join
 from src.models import db
 from src.services.dao.page import PageDAO
 from src.services.dao.site import SiteDAO
+from src.services.dao.url import UrlDAO
 
 bp = Blueprint("public", __name__)
 route = partial(bp.route, host="<host>")
@@ -40,6 +41,17 @@ def static_view(host: str, filename: str, extension: str):
             ),
             f"{filename}.{extension}",
         )
+
+    abort(404)
+
+
+@route("/<path:page_slug>/<string:detail_slug>/")
+def detail_view(host: str, page_slug: str, detail_slug: str):
+    dao = UrlDAO(db.session)
+    if url := dao.get_by_slug(host, page_slug, detail_slug):
+        print(url)
+        template, context = url.get_render_template()
+        return render_template(template, **context)
 
     abort(404)
 
