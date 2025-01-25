@@ -181,7 +181,7 @@ class Url(db.Model):
             },
         }
 
-        return (self.pages[0]._get_detail_template(), context)
+        return self.pages[0]._get_detail_template(), context
 
     def _get_parent_info(self) -> dict:
         return {
@@ -262,7 +262,9 @@ class UrlExtract(db.Model):
     draft_modified_at: Mapped[datetime.datetime | None]
     data_modified_at: Mapped[datetime.datetime | None]
 
-    UniqueConstraint(url_id, extract_id, name="urls_extracts_url_id_extract_id_key")
+    url_id_extract_id_key = UniqueConstraint(
+        url_id, extract_id, name="urls_extracts_url_id_extract_id_key"
+    )
 
     url: Mapped[Url] = relationship(back_populates="url_extracts")
     extract: Mapped[Extract] = relationship(back_populates="url_extracts")
@@ -445,7 +447,7 @@ class Page(db.Model):
                 for row in rows
             ]
 
-        return (self._get_page_template(), context)
+        return self._get_page_template(), context
 
     def _get_url_extracts_query(self, site_extracts: list[SiteExtract]) -> Select:
         # set alias with extract code as a column name
@@ -464,10 +466,10 @@ class Page(db.Model):
         return safe_join(
             self.site.get_template_folder(),
             self.template or "index.html"
-            if self.site.index_page_id == self.id
-            else "section.html"
+            if self.site.index_page_id == self.id  # index page
+            else "section.html"  # section page
             if self.is_section
-            else "page.html",
+            else "page.html",  # single page
         )
 
     def _get_detail_template(self) -> str:

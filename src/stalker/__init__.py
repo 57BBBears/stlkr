@@ -8,7 +8,7 @@ from scrapy.utils.project import get_project_settings
 
 class Stalker:
     """
-    Stalker is handle crawlers and init/start/stop process of crawling.
+    Stalker handles crawlers and init/start/stop process of crawling.
     """
 
     def __getitem__(self, item):
