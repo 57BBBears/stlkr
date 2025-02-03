@@ -2,6 +2,7 @@ import os
 
 from flask import current_app, flash, redirect, request, session, url_for
 from flask_admin import Admin, AdminIndexView, expose
+from flask_admin.actions import action
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.menu import MenuLink
 from flask_admin.model.template import EndpointLinkRowAction
@@ -32,6 +33,7 @@ from src.services.admin.resource_view import (
     open_temp_file,
     save_urls,
 )
+from src.services.admin.url_view import run_parse_urls_task
 from src.services.dao.url import UrlDAO
 from src.views.formatters import detail_url_formatter, page_urls_formatter
 from src.views.mixins import (
@@ -234,6 +236,13 @@ class UrlView(LoginRequiredMixin, ResourceAccessibleMixin, ModelView):
         form.resource_id.data = session.get("resource")
 
         return form
+
+    @action("Parse", "Parse urls", "Are you sure you want to parse selected urls?")
+    def action_parse(self, ids):
+        run_parse_urls_task(
+            current_user.id, int(request.args["resource"]), ids, self.session
+        )
+        flash(f"Task parsing {len(ids)} urls has been launched.")
 
 
 class UrlExtractView(LoginRequiredMixin, UrlAccessibleMixin, ModelView):

@@ -7,8 +7,6 @@ from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 
 from config import Config
-
-# from redis import Redis
 from src.models import db
 from src.services.auth import login_manager
 from src.services.mail import mail

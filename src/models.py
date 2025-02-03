@@ -1,5 +1,6 @@
 import datetime
 from typing import Annotated, Any, Optional
+from uuid import UUID
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
@@ -488,3 +489,14 @@ class PageExtract(db.Model):
     extract_id: Mapped[int] = mapped_column(ForeignKey(Extract.id, ondelete="cascade"))
 
     UniqueConstraint(page_id, extract_id, name="pages_extracts_page_id_extract_id_key")
+
+
+class Task(db.Model):
+    """Url parsing tasks."""
+
+    __tablename__ = "tasks"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey(User.id, ondelete="cascade"))
+    project_id: Mapped[int] = mapped_column(ForeignKey(Project.id, ondelete="cascade"))
+    is_complete: Mapped[bool] = mapped_column(server_default=false())

@@ -8,12 +8,16 @@ class UrlsSpider(scrapy.Spider):
     name = "url_spider"
 
     def __init__(
-        self, urls: dict[str, int], selectors: dict[int, str], *args, **kwargs
+        self,
+        urls: list[tuple[int, str]],
+        selectors: list[tuple[int, str]],
+        *args,
+        **kwargs,
     ):
         super().__init__(*args, **kwargs)
 
-        self.urls = urls
-        self.start_urls = list(urls.keys())
+        self.urls = {url_address: url_id for url_id, url_address in urls}
+        self.start_urls = list(self.urls.keys())
         self.selectors = selectors
 
     def parse(self, response, **kwargs):
@@ -24,7 +28,7 @@ class UrlsSpider(scrapy.Spider):
 
         extracts = []
         extract = ItemLoader(item=ExtractItem)
-        for extract_id, selector in self.selectors.items():
+        for extract_id, selector in self.selectors:
             extract.add_value("extract_id", extract_id)
             extract.add_value("draft", response.xpath(selector).get(""))
             extracts.append(extract.load_item())

@@ -13,8 +13,6 @@ flask-login = "^0.6.3"
 flask-migrate = "^4.0.7"
 flask-sqlalchemy = "^3.1.1"
 flask-wtf = "^1.2.1"
-redis = "^5.0.3"
-rq = "^1.16.1"
 scrapy = "^2.11.1"
 scrapy-fake-useragent = "^1.4.4"
 sqlalchemy = "^2.0.29"
@@ -31,6 +29,7 @@ flask-admin = "^2.0.0a3"
 flask-mail = "^0.10.0"
 bootstrap-flask = "^2.4.1"
 passlib = "^1.7.4"
+celery = "^5.4.0"
 
 
 [tool.poetry.group.dev.dependencies]

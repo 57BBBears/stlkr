@@ -51,15 +51,14 @@ class Config:
     URLS_PER_PAGE = int(getenv("URLS_PER_PAGE") or 10)
     ITEMS_PER_PAGE = int(getenv("ITEMS_PER_PAGE") or 10)
     # parsing
-    REDIS_URL = getenv("REDIS_URL")
-    QUEUES = getenv("QUEUES").split() if getenv("QUEUES") else ["default"]
+    TASK_BROKER_URI = getenv("TASK_BROKER_URI")
+    TASK_RESULT_BACKEND = getenv("TASK_RESULT_BACKEND")
     TASK_EXECUTION_TIME = int(getenv("TASK_EXECUTION_TIME") or 600)
     URLS_PER_EXTRACT = int(getenv("URLS_PER_EXTRACT") or 10)
     # import
     MAX_IMPORT_FILE_SIZE_KB = int(getenv("MAX_IMPORT_FILE_SIZE_KB") or 100)
     # other
     LOG_CONFIG = get_log_config(getenv("LOG_CONFIG"))
-    # api
 
 
 class TestingConfig(Config):

@@ -7,7 +7,7 @@
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
-from os import getenv
+from config import Config
 
 BOT_NAME = "parser"
 
@@ -110,4 +110,4 @@ TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
 
 # db
-SQLALCHEMY_DATABASE_URI = getenv("SQLALCHEMY_DATABASE_URI")
+SQLALCHEMY_DATABASE_URI = Config.SQLALCHEMY_DATABASE_URI

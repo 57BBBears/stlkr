@@ -73,6 +73,13 @@ class BaseDAO(Generic[Model]):
 
         return result.one_or_none()
 
+    def get_by_ids(self, model_ids: Sequence[int]) -> Sequence[Model]:
+        result = self.session.scalars(
+            select(self.model).where(self.model.id.in_(model_ids))
+        )
+
+        return result.all()
+
     def flush(self):
         self.session.flush()
 
