@@ -26,6 +26,16 @@ class LoginRequiredMixin:
         return redirect(url_for("core.index_view", next=request.endpoint))
 
 
+class UserAccessibleMixin:
+    def get_query(self):
+        return self.session.query(self.model).where(
+            self.model.user_id == current_user.id
+        )
+
+    def get_count_query(self):
+        return self.session.query(func.count("*")).select_from(self.get_query())
+
+
 class AccessibleMixinMeta(metaclass=AdminViewMeta): ...
 
 

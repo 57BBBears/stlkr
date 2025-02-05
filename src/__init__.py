@@ -10,7 +10,8 @@ from config import Config
 from src.models import db
 from src.services.auth import login_manager
 from src.services.mail import mail
-from src.views import admin, core, public
+from src.views import core, public
+from src.views.admin import admin
 
 
 def create_app(config: type[Config] = Config):
@@ -45,7 +46,7 @@ def create_app(config: type[Config] = Config):
     # }
 
     # routes
-    admin.admin.init_app(app)
+    admin.init_app(app)
     app.register_blueprint(core.bp)
     public.bp.template_folder = config.PUBLIC_TEMPLATE_FOLDER
     app.register_blueprint(public.bp)

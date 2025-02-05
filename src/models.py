@@ -1,4 +1,5 @@
 import datetime
+from enum import StrEnum, auto
 from typing import Annotated, Any, Optional
 from uuid import UUID
 
@@ -7,6 +8,7 @@ from flask_sqlalchemy import SQLAlchemy
 from furl import furl
 from sqlalchemy import (
     DateTime,
+    Enum,
     ForeignKey,
     MetaData,
     String,
@@ -103,6 +105,9 @@ class Project(db.Model):
         back_populates="project", passive_deletes=True
     )
     sites: Mapped[list["Site"]] = relationship(
+        back_populates="project", passive_deletes=True
+    )
+    tasks: Mapped[list["Task"]] = relationship(
         back_populates="project", passive_deletes=True
     )
 
@@ -491,6 +496,15 @@ class PageExtract(db.Model):
     UniqueConstraint(page_id, extract_id, name="pages_extracts_page_id_extract_id_key")
 
 
+class TaskStatus(StrEnum):
+    @staticmethod
+    def _generate_next_value_(name, start, count, last_values):
+        return name
+
+    ERROR = auto()
+    SUCCESS = auto()
+
+
 class Task(db.Model):
     """Url parsing tasks."""
 
@@ -499,4 +513,10 @@ class Task(db.Model):
     id: Mapped[UUID] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey(User.id, ondelete="cascade"))
     project_id: Mapped[int] = mapped_column(ForeignKey(Project.id, ondelete="cascade"))
-    is_complete: Mapped[bool] = mapped_column(server_default=false())
+    started_at: Mapped[timestamp]
+    finished_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    status: Mapped[StrEnum | None] = mapped_column(Enum(TaskStatus))
+
+    project: Mapped[Project] = relationship(back_populates="tasks")

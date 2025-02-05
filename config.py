@@ -52,9 +52,8 @@ class Config:
     ITEMS_PER_PAGE = int(getenv("ITEMS_PER_PAGE") or 10)
     # parsing
     TASK_BROKER_URI = getenv("TASK_BROKER_URI")
-    TASK_RESULT_BACKEND = getenv("TASK_RESULT_BACKEND")
-    TASK_EXECUTION_TIME = int(getenv("TASK_EXECUTION_TIME") or 600)
-    URLS_PER_EXTRACT = int(getenv("URLS_PER_EXTRACT") or 10)
+    TASK_SOFT_TIME_LIMIT = int(getenv("TASK_SOFT_TIME_LIMIT") or 5 * 60)
+    TASK_TIME_LIMIT = int(getenv("TASK_TIME_LIMIT") or 5 * 60 + 60)
     # import
     MAX_IMPORT_FILE_SIZE_KB = int(getenv("MAX_IMPORT_FILE_SIZE_KB") or 100)
     # other

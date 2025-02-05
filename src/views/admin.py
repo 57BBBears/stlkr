@@ -23,6 +23,7 @@ from src.models import (
     ResourceExtract,
     Site,
     SiteExtract,
+    Task,
     Url,
     UrlExtract,
     db,
@@ -43,6 +44,7 @@ from src.views.mixins import (
     ResourceAccessibleMixin,
     SiteAccessibleMixin,
     UrlAccessibleMixin,
+    UserAccessibleMixin,
 )
 
 
@@ -56,7 +58,7 @@ class AdminView(LoginRequiredMixin, AdminIndexView):
         return False
 
 
-class ProjectView(LoginRequiredMixin, ModelView):
+class ProjectView(LoginRequiredMixin, UserAccessibleMixin, ModelView):
     column_filters = ("name",)
     column_list = ["name"]
     form_columns = (
@@ -84,14 +86,6 @@ class ProjectView(LoginRequiredMixin, ModelView):
         form.user_id.data = current_user.id
 
         return form
-
-    def get_query(self):
-        return self.session.query(self.model).where(
-            self.model.user_id == current_user.id
-        )
-
-    def get_count_query(self):
-        return self.session.query(func.count("*")).select_from(self.get_query())
 
 
 class ExtractView(LoginRequiredMixin, ProjectAccessibleMixin, ModelView):
@@ -429,6 +423,15 @@ class PageUrlView(LoginRequiredMixin, PageAccessibleMixin, ModelView):
     list_template = "admin/custom_list.html"
 
 
+class TaskView(LoginRequiredMixin, UserAccessibleMixin, ModelView):
+    can_create = False
+    can_delete = False
+    can_edit = False
+    column_filters = ("project", "started_at", "finished_at", "status")
+    column_list = ["project", "started_at", "finished_at", "status"]
+    column_default_sort = ("started_at", True)
+
+
 admin = Admin(
     name="[stlkr]",
     url="/my/",
@@ -470,5 +473,6 @@ admin.add_view(PageView(Page, db.session, "Страницы", endpoint="pages"))
 admin.add_view(
     PageUrlView(PageUrl, db.session, "Привязанные ссылки", endpoint="page-urls")
 )
+admin.add_view(TaskView(Task, db.session, "Задачи", endpoint="tasks"))
 
 admin.add_link(MenuLink(name="Выйти", endpoint="core.logout_view"))

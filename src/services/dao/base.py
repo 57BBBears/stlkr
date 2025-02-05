@@ -97,3 +97,6 @@ class BaseDAO(Generic[Model]):
 
     def delete(self, model: Model):
         self.session.delete(model)
+
+    def close(self):
+        self.session.close()

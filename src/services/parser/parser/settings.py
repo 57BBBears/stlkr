@@ -6,9 +6,6 @@
 #     https://docs.scrapy.org/en/latest/topics/settings.html
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
-
-from config import Config
-
 BOT_NAME = "parser"
 
 SPIDER_MODULES = ["src.services.parser.spiders"]
@@ -108,6 +105,3 @@ AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
 # Set settings whose default value is deprecated to a future-proof value
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
 FEED_EXPORT_ENCODING = "utf-8"
-
-# db
-SQLALCHEMY_DATABASE_URI = Config.SQLALCHEMY_DATABASE_URI

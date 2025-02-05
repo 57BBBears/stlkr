@@ -9,6 +9,7 @@ from sqlalchemy import NullPool, create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from config import Config
 from src.services.dao.url_extract import UrlExtractDAO
 from src.services.parser.parser.items import ExtractItem, ParserItem
 
@@ -27,7 +28,7 @@ class DBPipeline:
     @classmethod
     def from_crawler(cls, crawler):
         return cls(
-            crawler.settings.get("SQLALCHEMY_DATABASE_URI"),
+            Config.SQLALCHEMY_DATABASE_URI,
         )
 
     def open_spider(self, spider):
