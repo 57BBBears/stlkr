@@ -501,7 +501,9 @@ class TaskStatus(StrEnum):
     def _generate_next_value_(name, start, count, last_values):
         return name
 
-    ERROR = auto()
+    STARTED = auto()
+    REVOKED = auto()
+    FAILURE = auto()
     SUCCESS = auto()
 
 

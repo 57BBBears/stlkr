@@ -2,7 +2,6 @@ from datetime import UTC, datetime
 
 from celery.exceptions import SoftTimeLimitExceeded
 from celery.utils.log import get_task_logger
-from flask import current_app
 
 from src.models import TaskStatus
 from src.services.dao.task import TaskDAO
@@ -12,11 +11,7 @@ from src.services.task.worker import celery, session
 logger = get_task_logger(__name__)
 
 
-@celery.task(
-    bind=True,
-    soft_time_limit=current_app.config["TASK_SOFT_TIME_LIMIT"],
-    time_limit=current_app.config["TASK_TIME_LIMIT"],
-)
+@celery.task(bind=True, track_started=True)
 async def parse_urls(
     self, urls: list[tuple[int, str]], selectors: list[tuple[int, str]]
 ):

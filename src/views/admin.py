@@ -24,6 +24,7 @@ from src.models import (
     Site,
     SiteExtract,
     Task,
+    TaskStatus,
     Url,
     UrlExtract,
     db,
@@ -34,6 +35,7 @@ from src.services.admin.resource_view import (
     open_temp_file,
     save_urls,
 )
+from src.services.admin.task_view import revoke_task
 from src.services.admin.url_view import run_parse_urls_task
 from src.services.dao.url import UrlDAO
 from src.views.formatters import detail_url_formatter, page_urls_formatter
@@ -236,6 +238,7 @@ class UrlView(LoginRequiredMixin, ResourceAccessibleMixin, ModelView):
         run_parse_urls_task(
             current_user.id, int(request.args["resource"]), ids, self.session
         )
+        self.session.commit()
         flash(f"Task parsing {len(ids)} urls has been launched.")
 
 
@@ -427,9 +430,27 @@ class TaskView(LoginRequiredMixin, UserAccessibleMixin, ModelView):
     can_create = False
     can_delete = False
     can_edit = False
-    column_filters = ("project", "started_at", "finished_at", "status")
+    column_filters = ("project", "status")
     column_list = ["project", "started_at", "finished_at", "status"]
     column_default_sort = ("started_at", True)
+
+    column_extra_row_actions = [
+        EndpointLinkRowAction(
+            "glyphicon glyphicon-remove", ".revoke_view", "Revoke scheduled task"
+        ),
+    ]
+
+    @expose("/revoke")
+    def revoke_view(self):
+        task_status = revoke_task(request.args.get("id"), self.session)
+        if task_status is TaskStatus.STARTED:
+            flash("Task has been already started.", "warning")
+        elif task_status is TaskStatus.REVOKED:
+            flash("Task has been revoked.")
+        else:
+            flash("Task is already finished.", "danger")
+
+        return redirect(url_for(".index_view"))
 
 
 admin = Admin(

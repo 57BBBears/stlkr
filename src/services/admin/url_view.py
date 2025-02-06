@@ -1,6 +1,7 @@
 from typing import Sequence
 from uuid import uuid4
 
+from flask import current_app
 from sqlalchemy.orm import Session
 
 from src.models import Task
@@ -30,4 +31,6 @@ def run_parse_urls_task(
         task_id=task_id,
         link=complete_task.s(),
         link_error=error_handler.s(),
+        soft_time_limit=current_app.config["TASK_SOFT_TIME_LIMIT"],
+        time_limit=current_app.config["TASK_TIME_LIMIT"],
     )
