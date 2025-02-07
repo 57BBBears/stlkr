@@ -68,7 +68,6 @@ COPY poetry.lock pyproject.toml ./
 RUN --mount=type=cache,target=/root/.cache \
     poetry install --without=dev
 
-
 ################################
 # DEVELOPMENT
 # Image used during development / testing
@@ -93,8 +92,8 @@ COPY ./migrations migrations/
 COPY ./src src/
 
 EXPOSE 5000
-CMD ["gunicorn", "app:app", "-k gevent"]
 
+CMD ["gunicorn", "app:app", "-k gevent"]
 
 ################################
 # PRODUCTION
@@ -110,5 +109,8 @@ COPY docker-entrypoint.sh app.py config.py ./
 COPY ./migrations migrations/
 COPY ./src src/
 
-EXPOSE 5000
 RUN chmod +x ./docker-entrypoint.sh
+
+EXPOSE 5000
+
+CMD ["gunicorn", "app:app", "-k gevent"]

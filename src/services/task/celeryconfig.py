@@ -1,5 +1,8 @@
 from kombu import Exchange, Queue
 
+from config import Config
+
+broker_url = Config.TASK_BROKER_URI
 task_ignore_result = True
 
 task_queues = (Queue("default", Exchange("default"), routing_key="default"),)

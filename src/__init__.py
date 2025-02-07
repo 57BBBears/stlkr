@@ -1,6 +1,5 @@
 from logging.config import dictConfig
 
-# import rq
 from flask import Flask
 from flask_bootstrap import Bootstrap4
 from flask_migrate import Migrate
@@ -34,16 +33,6 @@ def create_app(config: type[Config] = Config):
     login_manager.init_app(app)
     mail.init_app(app)
     Migrate(app, db, render_as_batch=True)
-
-    # app.redis = Redis.from_url(app.config["REDIS_URL"])
-    # app.queue = {
-    #     queue: rq.Queue(
-    #         queue,
-    #         connection=app.redis,
-    #         default_timeout=app.config["TASK_EXECUTION_TIME"],
-    #     )
-    #     for queue in app.config["QUEUES"]
-    # }
 
     # routes
     admin.init_app(app)

@@ -3,11 +3,11 @@ from sqlalchemy.orm import Session
 
 from src.models import TaskStatus
 from src.services.dao.task import TaskDAO
-from src.services.task.worker import celery
+from src.services.task.worker import app
 
 
 def revoke_task(task_id: str, session: Session) -> TaskStatus | None:
-    result = AsyncResult(task_id, app=celery)
+    result = AsyncResult(task_id, app=app)
     if result.ready():
         return None
     elif result.status == "STARTED":
