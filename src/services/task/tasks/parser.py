@@ -31,7 +31,7 @@ async def parse_urls(
 @app.task
 def error_handler(request, exc, traceback):
     logger.error(f"Task {request.id} exception. ", exc_info=exc)
-    _set_task_status(request.id, TaskStatus.ERROR)
+    _set_task_status(request.id, TaskStatus.FAILURE)
 
 
 @app.task

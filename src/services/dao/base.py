@@ -1,6 +1,7 @@
 from typing import Generic, Sequence, TypeVar
 
-from sqlalchemy import delete, exc, insert, select, update
+from sqlalchemy import delete, insert, select, update
+from sqlalchemy.exc import IntegrityError as SAIntegrityError
 from sqlalchemy.orm import Session
 
 from src.models import Base
@@ -26,13 +27,13 @@ class BaseDAO(Generic[Model]):
 
             return model
 
-        except exc.IntegrityError as e:
+        except SAIntegrityError as e:
             raise IntegrityError() from e
 
     def update(self, updates: list[dict]):
         try:
             self.session.execute(update(self.model), updates)
-        except exc.IntegrityError as e:
+        except SAIntegrityError as e:
             raise IntegrityError() from e
 
     def insert(self, inserts: list[dict]) -> Sequence[int]:
@@ -41,7 +42,7 @@ class BaseDAO(Generic[Model]):
             result = self.session.scalars(stmt, inserts)
 
             return result.all()
-        except exc.IntegrityError as e:
+        except SAIntegrityError as e:
             raise IntegrityError() from e
 
     def bulk_delete(self, ids: list[int]):
