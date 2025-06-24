@@ -29,6 +29,7 @@ services:
       TASK_CONCURRENCY: ${TASK_CONCURRENCY}
       TASK_LOG_FILE: ${TASK_LOG_FILE}
       WORKERS: ${WORKERS}
+      CORE_DOMAIN: ${CORE_DOMAIN}
     ports:
       - 5000:5000
     restart: unless-stopped
